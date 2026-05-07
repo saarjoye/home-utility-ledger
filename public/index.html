@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>家庭用户仪表盘</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body data-page="dashboard">
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo-mark" aria-hidden="true"></div>
+        <div>
+          <p class="eyebrow">家庭端</p>
+          <h1>家庭能源账单仪表盘</h1>
+          <p class="muted">聚合电、水、燃气账单与用量变化，统一展示家庭近期支出情况。</p>
+        </div>
+      </div>
+      <div class="topbar-actions">
+        <span class="chip" id="dashboardLastSync">最近同步: 读取中</span>
+        <span class="chip" id="dashboardHomeLabel">家庭: 读取中</span>
+      </div>
+    </header>
+
+    <div class="dashboard-layout">
+      <aside class="sidebar">
+        <p class="sidebar-title">家庭用户</p>
+        <a class="nav-item active" href="./index.html">仪表盘</a>
+        <a class="nav-item" href="#recent-bills">账单明细</a>
+        <a class="nav-item" href="#trend-card">趋势分析</a>
+        <a class="nav-item" href="#activity-card">最近动态</a>
+        <a class="nav-item" href="./admin.html">前往后台</a>
+
+        <section class="sidebar-card">
+          <p class="caption">本月提醒</p>
+          <strong class="sidebar-strong" id="sidebarTotalAmount">--</strong>
+          <p class="muted" id="sidebarInsight">正在等待接口返回本月支出摘要。</p>
+        </section>
+      </aside>
+
+      <main class="page-content">
+        <section class="hero hero-dashboard">
+          <div class="hero-copy">
+            <span class="chip chip-inverse">家庭账单总览</span>
+            <h2 id="heroHeadline">今天花了多少，这个月花在哪，最近有没有异常。</h2>
+            <p id="heroDescription">页面正在通过 `/api/dashboard/*` 接口加载真实数据。</p>
+            <div class="hero-stats" id="heroStats">
+              <article class="mini-card">
+                <span class="label">本月总支出</span>
+                <strong>加载中</strong>
+              </article>
+              <article class="mini-card">
+                <span class="label">昨日用电费用</span>
+                <strong>加载中</strong>
+              </article>
+              <article class="mini-card">
+                <span class="label">待确认账单</span>
+                <strong>加载中</strong>
+              </article>
+            </div>
+          </div>
+
+          <div class="hero-side">
+            <section class="glass-card">
+              <div class="section-row">
+                <h3>采集状态</h3>
+                <span class="caption">来源同步</span>
+              </div>
+              <div id="sourceStatusList" class="stack-list"></div>
+            </section>
+            <section class="glass-card">
+              <div class="section-row">
+                <h3>今日摘要</h3>
+                <span class="caption">自动生成</span>
+              </div>
+              <strong class="hero-highlight" id="todayUsageValue">--</strong>
+              <p class="muted muted-inverse" id="todayUsageSummary">等待接口返回今日数据摘要。</p>
+            </section>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="section-row">
+            <h3>本月费用分项</h3>
+            <span class="chip">按自然月汇总</span>
+          </div>
+          <div class="utility-grid" id="utilityCards"></div>
+        </section>
+
+        <div class="content-grid">
+          <section class="card" id="trend-card">
+            <div class="section-row">
+              <h3>月度趋势</h3>
+              <span class="chip" id="trendCaption">读取中</span>
+            </div>
+            <div class="chart-card">
+              <svg id="trendChart" viewBox="0 0 900 320" preserveAspectRatio="none" aria-label="费用趋势图"></svg>
+            </div>
+            <div class="legend-row" id="trendLegend"></div>
+          </section>
+
+          <section class="card" id="activity-card">
+            <div class="section-row">
+              <h3>费用结构与最近动态</h3>
+              <span class="chip">账单事件流</span>
+            </div>
+            <div class="ring-and-feed">
+              <div class="ring-panel">
+                <svg class="ring-chart" id="compositionChart" viewBox="0 0 160 160" aria-label="费用结构图"></svg>
+              </div>
+              <div class="timeline" id="activityTimeline"></div>
+            </div>
+          </section>
+        </div>
+
+        <section class="card" id="recent-bills">
+          <div class="section-row">
+            <h3>最近账单记录</h3>
+            <span class="chip">来自真实接口</span>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>日期</th>
+                  <th>类型</th>
+                  <th>账单周期</th>
+                  <th>用量</th>
+                  <th>金额</th>
+                  <th>来源</th>
+                  <th>状态</th>
+                </tr>
+              </thead>
+              <tbody id="billTableBody"></tbody>
+            </table>
+          </div>
+          <p class="footer-note" id="dashboardFootnote">若接口字段与假设不一致，页面会显示空态或错误态，不会写死整页数据。</p>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>

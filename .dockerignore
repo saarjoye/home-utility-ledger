@@ -1,0 +1,14 @@
+data/
+mockups/
+_hzwgc_home.html
+_hzwgc_index.js
+_person.js
+_wangting_home.html
+_wangting_main.js
+_wangting_vendor.js
+_water_home.js
+_wx_qr.png
+agent.md
+.env
+*.log
+node_modules/

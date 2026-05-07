@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>水电燃前台设计稿</title>
+  <link rel="stylesheet" href="./design.css">
+</head>
+<body>
+  <div class="frame">
+    <div class="topbar">
+      <div class="brand">
+        <div class="logo-mark"></div>
+        <div>
+          <h1>家用能耗账本</h1>
+          <p class="muted">面向家庭场景的电、水、燃统一账单中心</p>
+        </div>
+      </div>
+      <div class="topbar-actions">
+        <div class="chip">最近同步 2026-05-07 07:36</div>
+        <div class="chip">家庭主账户 · 杭州滨江</div>
+        <div class="avatar"></div>
+      </div>
+    </div>
+
+    <div class="layout">
+      <aside class="sidebar">
+        <p class="sidebar-title">用户前台</p>
+        <div class="nav-item active"><span class="nav-icon"></span>仪表盘</div>
+        <div class="nav-item"><span class="nav-icon"></span>账单明细</div>
+        <div class="nav-item"><span class="nav-icon"></span>统计分析</div>
+        <div class="nav-item"><span class="nav-icon"></span>推送记录</div>
+        <div class="nav-item"><span class="nav-icon"></span>账户中心</div>
+
+        <div class="sidebar-footer">
+          <div class="caption">本月提醒</div>
+          <div style="font-size: 26px; font-weight: 800; margin: 6px 0 8px;">¥326.50</div>
+          <div class="muted" style="line-height: 1.6;">较上月下降 8.4%，本周电费有明显回落，水费暂无新增账单。</div>
+        </div>
+      </aside>
+
+      <main class="main">
+        <section class="hero">
+          <div class="hero-grid">
+            <div>
+              <div class="chip" style="display:inline-flex; background: rgba(255,255,255,0.16); color:#fff; border-color: rgba(255,255,255,0.12);">MVP 首页设计稿</div>
+              <h2>把每天的用电、用水、用气和每一笔账单放进一张真正看得懂的家庭看板。</h2>
+              <p>首页先回答三个问题：今天花了多少、这个月花在哪里、最近有没有新账单或异常。页面的视觉重点放在总览数字、三费结构和变化趋势。</p>
+              <div class="hero-stats">
+                <div class="mini-card">
+                  <div class="label">本月总支出</div>
+                  <div class="value">¥326.50</div>
+                </div>
+                <div class="mini-card">
+                  <div class="label">昨日电费</div>
+                  <div class="value">¥5.63</div>
+                </div>
+                <div class="mini-card">
+                  <div class="label">待确认账单</div>
+                  <div class="value">2 条</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="hero-side">
+              <div class="sync-card">
+                <div class="caption" style="color: rgba(245,250,255,0.72);">采集状态</div>
+                <div class="sync-row"><span>电力 · 网上国网</span><span class="status-pill ok">已同步</span></div>
+                <div class="sync-row"><span>水务 · 杭水网上厅</span><span class="status-pill ok">已同步</span></div>
+                <div class="sync-row"><span>燃气 · 19服务厅</span><span class="status-pill warn">待确认</span></div>
+              </div>
+              <div class="sync-card">
+                <div class="caption" style="color: rgba(245,250,255,0.72);">今日摘要</div>
+                <div style="font-size: 28px; font-weight: 800; margin: 10px 0 8px;">12.8 kWh</div>
+                <div class="muted" style="color: rgba(245,250,255,0.78); line-height: 1.7;">昨日电量已生成真实日记录，燃气发现一笔新清单，等待晚间自动补拉。</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-title-row">
+            <h3>本月费用分项</h3>
+            <span class="chip">默认按自然月展示</span>
+          </div>
+          <div class="subgrid-3">
+            <div class="utility-card">
+              <div class="kicker"><span>电费</span><span class="utility-badge" style="background: var(--elec);"></span></div>
+              <div class="money">¥168.20</div>
+              <div class="meta">132.4 kWh · 昨日 12.8 kWh · 阶梯二档边缘</div>
+            </div>
+            <div class="utility-card">
+              <div class="kicker"><span>水费</span><span class="utility-badge" style="background: var(--water);"></span></div>
+              <div class="money">¥52.60</div>
+              <div class="meta">账单周期 04-01 至 04-30 · 8 m³ · 暂无真实日曲线</div>
+            </div>
+            <div class="utility-card">
+              <div class="kicker"><span>燃气费</span><span class="utility-badge" style="background: var(--gas);"></span></div>
+              <div class="money">¥105.70</div>
+              <div class="meta">最新清单已入库 · 账单型数据 · 支持周期统计</div>
+            </div>
+          </div>
+        </section>
+
+        <div class="content-grid">
+          <section class="card">
+            <div class="card-title-row">
+              <h3>月度趋势图</h3>
+              <span class="chip">电 / 水 / 燃 三线合并</span>
+            </div>
+            <div class="chart">
+              <div class="grid-lines"></div>
+              <svg viewBox="0 0 900 300" preserveAspectRatio="none" aria-hidden="true">
+                <polyline fill="none" stroke="#f5a623" stroke-width="4" points="40,230 150,220 260,165 370,150 480,162 590,122 700,110 820,86"/>
+                <polyline fill="none" stroke="#2f80ed" stroke-width="4" points="40,248 150,236 260,228 370,218 480,214 590,205 700,194 820,188"/>
+                <polyline fill="none" stroke="#27ae60" stroke-width="4" points="40,244 150,234 260,212 370,198 480,182 590,170 700,166 820,154"/>
+                <g fill="#fff" stroke-width="3">
+                  <circle cx="820" cy="86" r="6" stroke="#f5a623"></circle>
+                  <circle cx="820" cy="188" r="6" stroke="#2f80ed"></circle>
+                  <circle cx="820" cy="154" r="6" stroke="#27ae60"></circle>
+                </g>
+              </svg>
+            </div>
+            <div class="chart-legend">
+              <div class="legend-item"><span class="dot" style="background: var(--elec);"></span>电费走势</div>
+              <div class="legend-item"><span class="dot" style="background: var(--water);"></span>水费走势</div>
+              <div class="legend-item"><span class="dot" style="background: var(--gas);"></span>燃气走势</div>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="card-title-row">
+              <h3>费用结构与最近动态</h3>
+              <span class="chip">首页右侧信息岛</span>
+            </div>
+            <div class="ring-wrap">
+              <svg class="ring" viewBox="0 0 120 120" aria-hidden="true">
+                <circle cx="60" cy="60" r="42" fill="none" stroke="#edf2f7" stroke-width="14"></circle>
+                <circle cx="60" cy="60" r="42" fill="none" stroke="#f5a623" stroke-width="14" stroke-linecap="round" stroke-dasharray="100 264" transform="rotate(-90 60 60)"></circle>
+                <circle cx="60" cy="60" r="42" fill="none" stroke="#2f80ed" stroke-width="14" stroke-linecap="round" stroke-dasharray="34 264" stroke-dashoffset="-108" transform="rotate(-90 60 60)"></circle>
+                <circle cx="60" cy="60" r="42" fill="none" stroke="#27ae60" stroke-width="14" stroke-linecap="round" stroke-dasharray="70 264" stroke-dashoffset="-150" transform="rotate(-90 60 60)"></circle>
+                <text x="60" y="56" text-anchor="middle" font-size="12" fill="#6d7a90">总支出</text>
+                <text x="60" y="72" text-anchor="middle" font-size="18" font-weight="800" fill="#132743">¥326.5</text>
+              </svg>
+
+              <div class="timeline">
+                <div class="timeline-item">
+                  <div class="timeline-line"></div>
+                  <div class="timeline-copy">
+                    <strong>燃气清单已更新</strong>
+                    <div class="muted">05-07 07:12 检测到新清单，金额 ¥34.20，等待补抓详细账单页。</div>
+                  </div>
+                </div>
+                <div class="timeline-item">
+                  <div class="timeline-line"></div>
+                  <div class="timeline-copy">
+                    <strong>昨日电量生成成功</strong>
+                    <div class="muted">05-07 06:38 已写入日记录，昨日 12.8 kWh，日电费 ¥5.63。</div>
+                  </div>
+                </div>
+                <div class="timeline-item">
+                  <div class="timeline-line"></div>
+                  <div class="timeline-copy" style="border-bottom: none;">
+                    <strong>企业微信日报已推送</strong>
+                    <div class="muted">05-07 08:00 推送到家庭通知应用，状态成功。</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <section class="card">
+          <div class="card-title-row">
+            <h3>账单明细页的表格样式预览</h3>
+            <span class="chip">高频查询区域</span>
+          </div>
+          <table class="stats-table">
+            <thead>
+              <tr>
+                <th>日期</th>
+                <th>类型</th>
+                <th>账单周期</th>
+                <th>用量</th>
+                <th>金额</th>
+                <th>来源</th>
+                <th>状态</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>2026-05-06</td>
+                <td>电</td>
+                <td>单日记录</td>
+                <td>12.8 kWh</td>
+                <td>¥5.63</td>
+                <td>网上国网</td>
+                <td><span class="tag good">真实日数据</span></td>
+              </tr>
+              <tr>
+                <td>2026-04-30</td>
+                <td>水</td>
+                <td>04-01 ~ 04-30</td>
+                <td>8 m³</td>
+                <td>¥22.10</td>
+                <td>杭水网上厅</td>
+                <td><span class="tag warn">账单周期</span></td>
+              </tr>
+              <tr>
+                <td>2026-05-07</td>
+                <td>燃</td>
+                <td>04-08 ~ 05-07</td>
+                <td>--</td>
+                <td>¥34.20</td>
+                <td>19服务厅</td>
+                <td><span class="tag info">清单入库</span></td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="footer-note">设计意图：前台首页只展示“家庭看得懂”的结果，详细配置和采集控制全部放到后台。</div>
+        </section>
+      </main>
+    </div>
+  </div>
+</body>
+</html>

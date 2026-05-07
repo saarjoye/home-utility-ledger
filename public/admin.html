@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>后台管理页面</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body data-page="admin">
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo-mark" aria-hidden="true"></div>
+        <div>
+          <p class="eyebrow">管理端</p>
+          <h1>采集与通知后台</h1>
+          <p class="muted">管理账户接入、采集任务、健康状态与消息推送配置。</p>
+        </div>
+      </div>
+      <div class="topbar-actions">
+        <span class="chip" id="adminEnvLabel">环境: 读取中</span>
+        <span class="chip" id="adminHealthLabel">健康检查: 读取中</span>
+      </div>
+    </header>
+
+    <div class="admin-layout">
+      <aside class="admin-sidebar">
+        <div class="admin-sidebar-header">
+          <p class="eyebrow eyebrow-inverse">后台管理</p>
+          <h2>Admin</h2>
+        </div>
+        <a class="nav-item active" href="./admin.html">总控台</a>
+        <a class="nav-item" href="#account-config">账户配置</a>
+        <a class="nav-item" href="#health-panel">系统健康</a>
+        <a class="nav-item" href="#settings-panel">消息与规则</a>
+        <a class="nav-item" href="#logs-panel">日志告警</a>
+        <a class="nav-item" href="./index.html">返回前台</a>
+
+        <section class="sidebar-card sidebar-card-dark">
+          <p class="caption caption-inverse">当前关注</p>
+          <strong class="sidebar-strong" id="pendingIssuesCount">--</strong>
+          <p class="muted muted-inverse" id="pendingIssuesSummary">等待接口返回待处理事项。</p>
+        </section>
+      </aside>
+
+      <main class="page-content">
+        <section class="hero hero-admin">
+          <div class="hero-copy">
+            <span class="chip chip-inverse">后台总览</span>
+            <h2 id="adminHeadline">一眼知道哪里配置、哪里失败、哪里需要人工介入。</h2>
+            <p id="adminDescription">页面正在通过 `/api/admin/*` 接口加载后台状态。</p>
+          </div>
+
+          <div class="hero-side">
+            <section class="glass-card">
+              <div class="section-row">
+                <h3>系统健康度</h3>
+                <span class="caption">近 7 天</span>
+              </div>
+              <strong class="hero-highlight" id="healthScoreValue">--</strong>
+              <p class="muted muted-inverse" id="healthScoreSummary">等待健康总览接口。</p>
+            </section>
+            <section class="glass-card">
+              <div class="section-row">
+                <h3>待处理事项</h3>
+                <span class="caption">人工介入</span>
+              </div>
+              <div id="adminPendingList" class="stack-list"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="metrics-grid" id="adminMetrics"></section>
+
+        <div class="content-grid content-grid-admin">
+          <section class="card" id="account-config">
+            <div class="section-row">
+              <h3>账户配置</h3>
+              <div class="button-row">
+                <button class="button button-secondary" id="reloadAccountsButton" type="button">刷新账户</button>
+                <button class="button button-primary" id="testConnectionsButton" type="button">测试连接</button>
+              </div>
+            </div>
+            <div class="config-list" id="accountList"></div>
+            <p class="footer-note">账户行内容来自接口返回，不在前端固定写死。</p>
+          </section>
+
+          <section class="card" id="health-panel">
+            <div class="section-row">
+              <h3>系统健康与任务状态</h3>
+              <span class="chip">运维总览</span>
+            </div>
+            <div class="health-list" id="healthList"></div>
+            <div class="bar-chart-card">
+              <svg id="taskChart" viewBox="0 0 640 220" preserveAspectRatio="none" aria-label="任务状态柱状图"></svg>
+            </div>
+          </section>
+        </div>
+
+        <div class="content-grid content-grid-admin">
+          <section class="card" id="settings-panel">
+            <div class="section-row">
+              <h3>企业微信与统计规则</h3>
+              <div class="button-row">
+                <button class="button button-secondary" id="previewSettingsButton" type="button">预览模板</button>
+                <button class="button button-primary" id="saveSettingsButton" type="button">保存配置</button>
+              </div>
+            </div>
+            <form class="settings-form" id="settingsForm">
+              <div class="form-grid">
+                <label class="field">
+                  <span>CorpID</span>
+                  <input name="corpId" type="text" placeholder="读取中">
+                </label>
+                <label class="field">
+                  <span>AgentID</span>
+                  <input name="agentId" type="text" placeholder="读取中">
+                </label>
+                <label class="field">
+                  <span>日报推送时间</span>
+                  <input name="dailyPushTime" type="text" placeholder="读取中">
+                </label>
+                <label class="field">
+                  <span>月报推送时间</span>
+                  <input name="monthlyPushTime" type="text" placeholder="读取中">
+                </label>
+                <label class="field field-span-2">
+                  <span>水/燃无日数据策略</span>
+                  <input name="fallbackStrategy" type="text" placeholder="读取中">
+                </label>
+                <label class="field field-span-2">
+                  <span>估算模式</span>
+                  <input name="estimationMode" type="text" placeholder="读取中">
+                </label>
+              </div>
+            </form>
+            <p class="footer-note" id="settingsStatus">接口可用时将使用 `POST /api/admin/settings` 保存。</p>
+          </section>
+
+          <section class="card" id="logs-panel">
+            <div class="section-row">
+              <h3>日志与告警</h3>
+              <span class="chip">可追溯</span>
+            </div>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>时间</th>
+                    <th>模块</th>
+                    <th>级别</th>
+                    <th>摘要</th>
+                  </tr>
+                </thead>
+                <tbody id="logTableBody"></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>å®¶åº­æ°´çµçè´¦æ¬ - ç®¡çåå°</title>
+  <title>家庭水电燃账本 - 管理后台</title>
   <link rel="stylesheet" href="./admin.css">
 </head>
 <body class="panel-body">
@@ -13,57 +13,57 @@
         <div class="brand-icon">U</div>
         <div>
           <div class="brand-title">Utility Ledger</div>
-          <div class="brand-subtitle">å®¶åº­ééåå°</div>
+          <div class="brand-subtitle">家庭采集后台</div>
         </div>
       </div>
 
       <div class="nav-group">
-        <div class="nav-label">æ»è§</div>
-        <a class="nav-item active" href="#overview">åå°ä»ªè¡¨ç</a>
-        <a class="nav-item" href="#accounts">è´¦æ·éç½®</a>
-        <a class="nav-item" href="#jobs">ééä»»å¡</a>
-        <a class="nav-item" href="#health">ç³»ç»å¥åº·</a>
-        <a class="nav-item" href="#settings">æ¨éä¸è§å</a>
-        <a class="nav-item" href="#logs">è¿è¡æ¥å¿</a>
+        <div class="nav-label">总览</div>
+        <a class="nav-item active" href="#overview">后台仪表盘</a>
+        <a class="nav-item" href="#accounts">账户配置</a>
+        <a class="nav-item" href="#jobs">采集任务</a>
+        <a class="nav-item" href="#health">系统健康</a>
+        <a class="nav-item" href="#settings">推送与规则</a>
+        <a class="nav-item" href="#logs">运行日志</a>
       </div>
 
       <div class="sidebar-footer">
-        <a class="nav-item" href="/dashboard">åå¾åå°</a>
-        <a class="nav-item" href="/logout">éåºç»å½</a>
+        <a class="nav-item" href="/dashboard">前往前台</a>
+        <a class="nav-item" href="/logout">退出登录</a>
       </div>
     </aside>
 
     <main class="panel-content">
       <header class="page-header" id="overview">
         <div>
-          <p class="eyebrow">ç®¡çåå°</p>
-          <h1>ééãè´¦åä¸ä¼ä¸å¾®ä¿¡éç½®æ»æ§å°</h1>
-          <p class="page-description">çé¢é£æ ¼åè Lucky Bridgeï¼ä½å·²æ¹ä¸ºæ´éåå®¶åº­æ°´çµçè´¦æ¬çä¼è¯ç»å½ååå°æ°æ®è§å¾ã</p>
+          <p class="eyebrow">管理后台</p>
+          <h1>采集、账单与企业微信配置总控台</h1>
+          <p class="page-description">界面风格参考 Lucky Bridge，但已改为更适合家庭水电燃账本的会话登录和后台数据视图。</p>
         </div>
         <div class="header-actions">
-          <span class="info-chip" id="currentUserChip">å½åç¨æ·: è¯»åä¸­</span>
-          <span class="info-chip" id="runtimeChip">è¿è¡ç¯å¢: è¯»åä¸­</span>
-          <button class="btn btn-secondary" id="refreshPageButton" type="button">å·æ°æ°æ®</button>
-          <button class="btn btn-primary" id="logoutButton" type="button">éåºç»å½</button>
+          <span class="info-chip" id="currentUserChip">当前用户: 读取中</span>
+          <span class="info-chip" id="runtimeChip">运行环境: 读取中</span>
+          <button class="btn btn-secondary" id="refreshPageButton" type="button">刷新数据</button>
+          <button class="btn btn-primary" id="logoutButton" type="button">退出登录</button>
         </div>
       </header>
 
       <section class="hero-panel">
         <div>
-          <p class="eyebrow">ç¶ææ¦è§</p>
-          <h2 id="heroTitle">æ­£å¨è½½å¥åå°æè¦</h2>
-          <p id="heroDescription">é¡µé¢ä¼èåè´¦æ·ãä»»å¡ãå¥åº·ä¸æ¶æ¯æ¨ééç½®ã</p>
+          <p class="eyebrow">状态概览</p>
+          <h2 id="heroTitle">正在载入后台摘要</h2>
+          <p id="heroDescription">页面会聚合账户、任务、健康与消息推送配置。</p>
         </div>
         <div class="hero-side">
           <div class="hero-card">
-            <span class="hero-label">å¾å¤çäºé¡¹</span>
+            <span class="hero-label">待处理事项</span>
             <strong id="pendingCountValue">--</strong>
-            <p id="pendingCountHint">æ­£å¨ç»è®¡å¾å³æ³¨é¡¹</p>
+            <p id="pendingCountHint">正在统计待关注项</p>
           </div>
           <div class="hero-card">
-            <span class="hero-label">æè¿æ£æ¥</span>
+            <span class="hero-label">最近检查</span>
             <strong id="healthScoreValue">--</strong>
-            <p id="healthScoreHint">æ­£å¨è½½å¥å¥åº·åº¦</p>
+            <p id="healthScoreHint">正在载入健康度</p>
           </div>
         </div>
       </section>
@@ -73,14 +73,14 @@
       <div class="section-grid">
         <section class="panel-card" id="pending">
           <div class="section-head">
-            <h3>å¾å¤çäºé¡¹</h3>
+            <h3>待处理事项</h3>
           </div>
           <div class="stack-list" id="pendingList"></div>
         </section>
 
         <section class="panel-card" id="health">
           <div class="section-head">
-            <h3>ç³»ç»å¥åº·</h3>
+            <h3>系统健康</h3>
           </div>
           <div class="stack-list" id="healthList"></div>
         </section>
@@ -88,16 +88,16 @@
 
       <section class="panel-card" id="accounts">
         <div class="section-head">
-          <h3>è´¦æ·éç½®</h3>
-          <p>å¯ç´æ¥å¯åæä¸ªééè´¦æ·ï¼ä¾¿äºä¸´æ¶éç¦»å¼å¸¸è´¦å·ã</p>
+          <h3>账户配置</h3>
+          <p>可直接启停某个采集账户，便于临时隔离异常账号。</p>
         </div>
         <div class="stack-list" id="accountList"></div>
       </section>
 
       <section class="panel-card" id="jobs">
         <div class="section-head">
-          <h3>ééä»»å¡</h3>
-          <p>æ¯ææå¨è§¦åçµãæ°´ãçä»»å¡ï¼éªè¯å½åééé¾è·¯æ¯å¦å¯ç¨ã</p>
+          <h3>采集任务</h3>
+          <p>支持手动触发电、水、燃任务，验证当前采集链路是否可用。</p>
         </div>
         <div class="stack-list" id="jobList"></div>
       </section>
@@ -105,25 +105,25 @@
       <div class="section-grid">
         <section class="panel-card" id="settings">
           <div class="section-head">
-            <h3>æ¨éä¸ç»è®¡éç½®</h3>
-            <p>å½ååååªè¯»å±ç¤ºï¼åç»­å¯ç»§ç»­æ¥å¥ä¿å­æ¥å£ã</p>
+            <h3>推送与统计配置</h3>
+            <p>当前先做只读展示，后续可继续接入保存接口。</p>
           </div>
           <div class="settings-grid" id="settingsGrid"></div>
         </section>
 
         <section class="panel-card" id="logs">
           <div class="section-head">
-            <h3>æè¿æ¥å¿</h3>
-            <p>ä¿çæè¿çåå°è¿è¡è®°å½ï¼æ¹ä¾¿ææ¥ééå¤±è´¥ã</p>
+            <h3>最近日志</h3>
+            <p>保留最近的后台运行记录，方便排查采集失败。</p>
           </div>
           <div class="table-shell">
             <table class="data-table">
               <thead>
                 <tr>
-                  <th>æ¶é´</th>
-                  <th>æ¨¡å</th>
-                  <th>çº§å«</th>
-                  <th>æè¦</th>
+                  <th>时间</th>
+                  <th>模块</th>
+                  <th>级别</th>
+                  <th>摘要</th>
                 </tr>
               </thead>
               <tbody id="logTableBody"></tbody>

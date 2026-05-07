@@ -7,7 +7,7 @@
 
   document.addEventListener("DOMContentLoaded", () => {
     init().catch((error) => {
-      renderFatal(error.message || "åå°å è½½å¤±è´¥");
+      renderFatal(error.message || "后台加载失败");
     });
   });
 
@@ -49,7 +49,7 @@
 
     if (response.status === 401) {
       window.location.href = "/login";
-      throw new Error("æªç»å½æç»å½å·²å¤±æ");
+      throw new Error("未登录或登录已失效");
     }
 
     let payload = null;
@@ -67,32 +67,32 @@
   }
 
   function renderFatal(message) {
-    document.getElementById("heroTitle").textContent = "åå°å è½½å¤±è´¥";
+    document.getElementById("heroTitle").textContent = "后台加载失败";
     document.getElementById("heroDescription").textContent = message;
     document.getElementById("metricGrid").innerHTML = `<div class="alert-box">${escapeHtml(message)}</div>`;
   }
 
   function renderHeader() {
-    setText("currentUserChip", `å½åç¨æ·: ${state.user?.username || "æªç¥"}`);
-    setText("runtimeChip", `è¿è¡ç¯å¢: ${state.runtime.environment || "unknown"} / ${state.runtime.node || "node"}`);
+    setText("currentUserChip", `当前用户: ${state.user?.username || "未知"}`);
+    setText("runtimeChip", `运行环境: ${state.runtime.environment || "unknown"} / ${state.runtime.node || "node"}`);
   }
 
   function renderHero() {
     const pendingCount = safeArray(state.summary.pending).length;
-    const healthMetric = safeMetric("å¥åº·è¯å");
-    setText("heroTitle", `${state.summary.title || "å®¶åº­æ°´çµçè´¦æ¬"} åå°å·²æ¥å¥ç»å½ä¿æ¤`);
-    setText("heroDescription", state.summary.subtitle || "ééãç»è®¡ä¸éç¥åå°");
+    const healthMetric = safeMetric("健康评分");
+    setText("heroTitle", `${state.summary.title || "家庭水电燃账本"} 后台已接入登录保护`);
+    setText("heroDescription", state.summary.subtitle || "采集、统计与通知后台");
     setText("pendingCountValue", String(pendingCount));
-    setText("pendingCountHint", pendingCount ? "å­å¨éè¦äººå·¥å³æ³¨çé¡¹" : "å½åæ²¡æå¾å¤çå¼å¸¸");
+    setText("pendingCountHint", pendingCount ? "存在需要人工关注的项" : "当前没有待处理异常");
     setText("healthScoreValue", healthMetric?.value || "--");
-    setText("healthScoreHint", healthMetric?.hint || "åå°å¥åº·åº¦");
+    setText("healthScoreHint", healthMetric?.hint || "后台健康度");
   }
 
   function renderMetrics() {
     const container = document.getElementById("metricGrid");
     const metrics = safeArray(state.summary.metrics);
     if (!metrics.length) {
-      container.innerHTML = `<div class="empty-state">ææ ææ æ°æ®</div>`;
+      container.innerHTML = `<div class="empty-state">暂无指标数据</div>`;
       return;
     }
 
@@ -109,7 +109,7 @@
     const container = document.getElementById("pendingList");
     const items = safeArray(state.summary.pending);
     if (!items.length) {
-      container.innerHTML = `<div class="empty-state">å½åæ²¡æå¾å¤çäºé¡¹</div>`;
+      container.innerHTML = `<div class="empty-state">当前没有待处理事项</div>`;
       return;
     }
 
@@ -117,7 +117,7 @@
       <div class="stack-item">
         <div class="stack-item-main">
           <div class="stack-item-title">${escapeHtml(item.title || "--")}</div>
-          <div class="stack-item-subtitle">éè¦äººå·¥å³æ³¨æå¤æ¥æè¿ä¸æ¬¡ä»»å¡ç»æ</div>
+          <div class="stack-item-subtitle">需要人工关注或复查最近一次任务结果</div>
         </div>
         <div class="stack-item-actions">
           <span class="status-badge ${statusClass(item.status)}">${escapeHtml(item.status || "--")}</span>
@@ -130,7 +130,7 @@
     const container = document.getElementById("healthList");
     const items = safeArray(state.summary.health);
     if (!items.length) {
-      container.innerHTML = `<div class="empty-state">ææ å¥åº·æ£æ¥æ°æ®</div>`;
+      container.innerHTML = `<div class="empty-state">暂无健康检查数据</div>`;
       return;
     }
 
@@ -138,7 +138,7 @@
       <div class="stack-item">
         <div class="stack-item-main">
           <div class="stack-item-title">${escapeHtml(item.name || "--")}</div>
-          <div class="stack-item-subtitle">åå°å¥åº·æ£æ¥ç»æ</div>
+          <div class="stack-item-subtitle">后台健康检查结果</div>
         </div>
         <div class="stack-item-actions">
           <span class="status-badge ${statusClass(item.status)}">${escapeHtml(item.status || "--")}</span>
@@ -151,22 +151,22 @@
     const container = document.getElementById("accountList");
     const items = safeArray(state.summary.accounts);
     if (!items.length) {
-      container.innerHTML = `<div class="empty-state">ææ è´¦æ·éç½®</div>`;
+      container.innerHTML = `<div class="empty-state">暂无账户配置</div>`;
       return;
     }
 
     container.innerHTML = items.map((item) => `
       <div class="stack-item">
         <div class="stack-item-main">
-          <div class="stack-item-title">${escapeHtml(item.name || "--")} Â· ${escapeHtml(utilityLabel(item.utilityType))}</div>
+          <div class="stack-item-title">${escapeHtml(item.name || "--")} · ${escapeHtml(utilityLabel(item.utilityType))}</div>
           <div class="stack-item-subtitle">
-            æå¡å: ${escapeHtml(item.provider || "--")} Â· è´¦å·: ${escapeHtml(item.accountNo || "--")} Â· ç»å½æ¹å¼: ${escapeHtml(item.loginMethod || "--")}
+            服务商: ${escapeHtml(item.provider || "--")} · 账号: ${escapeHtml(item.accountNo || "--")} · 登录方式: ${escapeHtml(item.loginMethod || "--")}
           </div>
         </div>
         <div class="stack-item-actions">
           <span class="status-badge ${statusClass(item.status)}">${escapeHtml(item.status || "--")}</span>
           <button class="btn btn-ghost" data-toggle-account="${escapeHtml(String(item.id))}" type="button">
-            ${item.status === "disabled" ? "å¯ç¨" : "åç¨"}
+            ${item.status === "disabled" ? "启用" : "停用"}
           </button>
         </div>
       </div>
@@ -177,7 +177,7 @@
     const container = document.getElementById("jobList");
     const items = safeArray(state.summary.jobs);
     if (!items.length) {
-      container.innerHTML = `<div class="empty-state">ææ ééä»»å¡</div>`;
+      container.innerHTML = `<div class="empty-state">暂无采集任务</div>`;
       return;
     }
 
@@ -186,12 +186,12 @@
         <div class="stack-item-main">
           <div class="stack-item-title">${escapeHtml(item.name || "--")}</div>
           <div class="stack-item-subtitle">
-            ç±»å: ${escapeHtml(utilityLabel(item.utilityType))} Â· å®æ¶: ${escapeHtml(item.scheduleTime || "--")} Â· ä¸æ¬¡è¿è¡: ${escapeHtml(item.lastRunAt || "--")}
+            类型: ${escapeHtml(utilityLabel(item.utilityType))} · 定时: ${escapeHtml(item.scheduleTime || "--")} · 上次运行: ${escapeHtml(item.lastRunAt || "--")}
           </div>
         </div>
         <div class="stack-item-actions">
           <span class="status-badge ${statusClass(item.lastStatus)}">${escapeHtml(item.lastStatus || "--")}</span>
-          <button class="btn btn-primary" data-run-job="${escapeHtml(item.utilityType || "")}" type="button">ç«å³æ§è¡</button>
+          <button class="btn btn-primary" data-run-job="${escapeHtml(item.utilityType || "")}" type="button">立即执行</button>
         </div>
       </div>
     `).join("");
@@ -202,14 +202,14 @@
     const wecom = state.summary.settings?.wecom || {};
     const statistics = state.summary.settings?.statistics || {};
     const items = [
-      { label: "ä¼ä¸å¾®ä¿¡ CorpID", value: wecom.corpId || "--" },
-      { label: "ä¼ä¸å¾®ä¿¡ AgentID", value: wecom.agentId || "--" },
-      { label: "æ¥æ¨éæ¶é´", value: wecom.dailyPushTime || "--" },
-      { label: "ææ¨éæ¶é´", value: wecom.monthlyPushTime || "--" },
-      { label: "æ¨éæ¥æ¶äºº", value: safeArray(wecom.recipients).join(", ") || "--" },
-      { label: "é»è®¤ç»è®¡ç²åº¦", value: statistics.defaultGranularity || "--" },
-      { label: "æ°´çç»è®¡ç­ç¥", value: statistics.waterGasStrategy || "--" },
-      { label: "ä¼°ç®å¼å³", value: statistics.estimationEnabled ? "å¼å¯" : "å³é­" }
+      { label: "企业微信 CorpID", value: wecom.corpId || "--" },
+      { label: "企业微信 AgentID", value: wecom.agentId || "--" },
+      { label: "日推送时间", value: wecom.dailyPushTime || "--" },
+      { label: "月推送时间", value: wecom.monthlyPushTime || "--" },
+      { label: "推送接收人", value: safeArray(wecom.recipients).join(", ") || "--" },
+      { label: "默认统计粒度", value: statistics.defaultGranularity || "--" },
+      { label: "水燃统计策略", value: statistics.waterGasStrategy || "--" },
+      { label: "估算开关", value: statistics.estimationEnabled ? "开启" : "关闭" }
     ];
 
     container.innerHTML = items.map((item) => `
@@ -224,7 +224,7 @@
     const tbody = document.getElementById("logTableBody");
     const items = safeArray(state.summary.logs);
     if (!items.length) {
-      tbody.innerHTML = `<tr><td colspan="4"><div class="empty-state">ææ æ¥å¿</div></td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="4"><div class="empty-state">暂无日志</div></td></tr>`;
       return;
     }
 
@@ -299,9 +299,9 @@
   }
 
   function utilityLabel(type) {
-    if (type === "electricity") return "çµ";
-    if (type === "water") return "æ°´";
-    if (type === "gas") return "çæ°";
+    if (type === "electricity") return "电";
+    if (type === "water") return "水";
+    if (type === "gas") return "燃气";
     return type || "--";
   }
 

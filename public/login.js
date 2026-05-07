@@ -18,7 +18,7 @@
     };
 
     loginButton.disabled = true;
-    loginButton.textContent = "ç»å½ä¸­...";
+    loginButton.textContent = "登录中...";
 
     try {
       const response = await fetch("/api/auth/login", {
@@ -32,15 +32,15 @@
 
       const result = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(result.error || "ç»å½å¤±è´¥");
+        throw new Error(result.error || "登录失败");
       }
 
       window.location.href = "/admin";
     } catch (error) {
-      showError(error.message || "ç»å½å¤±è´¥");
+      showError(error.message || "登录失败");
     } finally {
       loginButton.disabled = false;
-      loginButton.textContent = "ç»å½åå°";
+      loginButton.textContent = "登录后台";
     }
   });
 

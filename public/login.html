@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>å®¶åº­æ°´çµçè´¦æ¬ - ç»å½</title>
+  <link rel="stylesheet" href="./admin.css">
+</head>
+<body class="login-body">
+  <div class="login-container">
+    <div class="login-box">
+      <div class="brand-mark">U</div>
+      <h1>å®¶åº­æ°´çµçè´¦æ¬</h1>
+      <p class="login-subtitle">åè Lucky Bridge çåå°ç»å½é£æ ¼ï¼æ¹ä¸ºæ¬é¡¹ç®ä¸ç¨çç®¡çåä¼è¯ç»å½ã</p>
+
+      <form id="loginForm" class="login-form">
+        <label class="field-label" for="usernameInput">ç®¡çåè´¦å·</label>
+        <input id="usernameInput" name="username" type="text" autocomplete="username" placeholder="è¯·è¾å¥ç®¡çåè´¦å·" required autofocus>
+
+        <label class="field-label" for="passwordInput">ç®¡çåå¯ç </label>
+        <input id="passwordInput" name="password" type="password" autocomplete="current-password" placeholder="è¯·è¾å¥ç®¡çåå¯ç " required>
+
+        <div class="alert-box hidden" id="loginError"></div>
+
+        <button class="btn btn-primary btn-block" id="loginButton" type="submit">ç»å½åå°</button>
+      </form>
+    </div>
+  </div>
+
+  <script src="./login.js"></script>
+</body>
+</html>

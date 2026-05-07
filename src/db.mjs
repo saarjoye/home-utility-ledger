@@ -27,6 +27,63 @@ function iso(dateString) {
   return new Date(dateString).toISOString();
 }
 
+function looksLikeMojibake(value) {
+  return /[À-ÿ�]/.test(value);
+}
+
+function textQualityScore(value) {
+  const cjkCount = (value.match(/[\u3400-\u9fff]/g) || []).length;
+  const latinSupplementCount = (value.match(/[À-ÿ]/g) || []).length;
+  const replacementCount = (value.match(/�/g) || []).length;
+  const commonPunctuationCount = (value.match(/[，。！？：“”‘’、】【（）《》、]/g) || []).length;
+  return (cjkCount * 3) + commonPunctuationCount - (latinSupplementCount * 2) - (replacementCount * 4);
+}
+
+function repairPossibleMojibake(value) {
+  if (typeof value !== "string" || !value || !looksLikeMojibake(value)) {
+    return value;
+  }
+
+  const repaired = Buffer.from(value, "latin1").toString("utf8");
+  if (!repaired || repaired === value) {
+    return value;
+  }
+
+  return textQualityScore(repaired) > textQualityScore(value) ? repaired : value;
+}
+
+function repairNestedText(value) {
+  if (typeof value === "string") {
+    return repairPossibleMojibake(value);
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => repairNestedText(item));
+  }
+
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, repairNestedText(item)])
+    );
+  }
+
+  return value;
+}
+
+function repairSerializedJson(value) {
+  if (typeof value !== "string" || !value) {
+    return value;
+  }
+
+  try {
+    const parsed = JSON.parse(value);
+    const repaired = repairNestedText(parsed);
+    return JSON.stringify(repaired);
+  } catch {
+    return repairPossibleMojibake(value);
+  }
+}
+
 export function openDatabase(dbPath = DEFAULT_DB_PATH) {
   ensureDirectory(dbPath);
   const db = new DatabaseSync(dbPath);
@@ -395,6 +452,146 @@ export function seed(db) {
     estimationEnabled: false,
     includeEstimatedInTotal: false
   }), now);
+}
+
+export function repairStoredText(db) {
+  const accountRows = db.prepare(`
+    SELECT id, name, provider, login_name, login_method, notes
+    FROM accounts
+  `).all();
+  const updateAccount = db.prepare(`
+    UPDATE accounts
+    SET name = ?, provider = ?, login_name = ?, login_method = ?, notes = ?, updated_at = ?
+    WHERE id = ?
+  `);
+  for (const row of accountRows) {
+    const next = {
+      name: repairPossibleMojibake(row.name),
+      provider: repairPossibleMojibake(row.provider),
+      loginName: repairPossibleMojibake(row.login_name),
+      loginMethod: repairPossibleMojibake(row.login_method),
+      notes: repairPossibleMojibake(row.notes)
+    };
+    if (
+      next.name !== row.name ||
+      next.provider !== row.provider ||
+      next.loginName !== row.login_name ||
+      next.loginMethod !== row.login_method ||
+      next.notes !== row.notes
+    ) {
+      updateAccount.run(
+        next.name,
+        next.provider,
+        next.loginName,
+        next.loginMethod,
+        next.notes,
+        new Date().toISOString(),
+        row.id
+      );
+    }
+  }
+
+  const jobRows = db.prepare(`
+    SELECT id, name, status_hint
+    FROM sync_jobs
+  `).all();
+  const updateJob = db.prepare(`
+    UPDATE sync_jobs
+    SET name = ?, status_hint = ?, updated_at = ?
+    WHERE id = ?
+  `);
+  for (const row of jobRows) {
+    const nextName = repairPossibleMojibake(row.name);
+    const nextStatusHint = repairPossibleMojibake(row.status_hint);
+    if (nextName !== row.name || nextStatusHint !== row.status_hint) {
+      updateJob.run(nextName, nextStatusHint, new Date().toISOString(), row.id);
+    }
+  }
+
+  const billRows = db.prepare(`
+    SELECT id, source_channel
+    FROM bill_records
+  `).all();
+  const updateBill = db.prepare(`
+    UPDATE bill_records
+    SET source_channel = ?
+    WHERE id = ?
+  `);
+  for (const row of billRows) {
+    const nextSourceChannel = repairPossibleMojibake(row.source_channel);
+    if (nextSourceChannel !== row.source_channel) {
+      updateBill.run(nextSourceChannel, row.id);
+    }
+  }
+
+  const dailyRows = db.prepare(`
+    SELECT id, source_channel
+    FROM daily_records
+  `).all();
+  const updateDaily = db.prepare(`
+    UPDATE daily_records
+    SET source_channel = ?
+    WHERE id = ?
+  `);
+  for (const row of dailyRows) {
+    const nextSourceChannel = repairPossibleMojibake(row.source_channel);
+    if (nextSourceChannel !== row.source_channel) {
+      updateDaily.run(nextSourceChannel, row.id);
+    }
+  }
+
+  const pushRows = db.prepare(`
+    SELECT id, target, title, details
+    FROM push_logs
+  `).all();
+  const updatePush = db.prepare(`
+    UPDATE push_logs
+    SET target = ?, title = ?, details = ?
+    WHERE id = ?
+  `);
+  for (const row of pushRows) {
+    const next = {
+      target: repairPossibleMojibake(row.target),
+      title: repairPossibleMojibake(row.title),
+      details: repairPossibleMojibake(row.details)
+    };
+    if (next.target !== row.target || next.title !== row.title || next.details !== row.details) {
+      updatePush.run(next.target, next.title, next.details, row.id);
+    }
+  }
+
+  const logRows = db.prepare(`
+    SELECT id, message, details
+    FROM system_logs
+  `).all();
+  const updateLog = db.prepare(`
+    UPDATE system_logs
+    SET message = ?, details = ?
+    WHERE id = ?
+  `);
+  for (const row of logRows) {
+    const nextMessage = repairPossibleMojibake(row.message);
+    const nextDetails = repairSerializedJson(row.details);
+    if (nextMessage !== row.message || nextDetails !== row.details) {
+      updateLog.run(nextMessage, nextDetails, row.id);
+    }
+  }
+
+  const settingRows = db.prepare(`
+    SELECT key, value
+    FROM settings
+  `).all();
+  const updateSetting = db.prepare(`
+    UPDATE settings
+    SET value = ?, updated_at = ?
+    WHERE key = ?
+  `);
+  for (const row of settingRows) {
+    const nextValue = repairSerializedJson(row.value);
+    if (nextValue !== row.value) {
+      updateSetting.run(nextValue, new Date().toISOString(), row.key);
+    }
+  }
 }
 
 export function getSiteSettings(db) {

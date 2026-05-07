@@ -8,6 +8,7 @@ import {
   openDatabase,
   migrate,
   seed,
+  repairStoredText,
   deleteExpiredSessions,
   createSession,
   getSessionByTokenHash,
@@ -46,6 +47,7 @@ const cookieSecure = String(process.env.COOKIE_SECURE || "false").toLowerCase() 
 const db = openDatabase(dbPath);
 migrate(db);
 seed(db);
+repairStoredText(db);
 deleteExpiredSessions(db);
 
 if (process.argv.includes("--seed-only")) {
@@ -468,7 +470,7 @@ const server = http.createServer(async (req, res) => {
     if (!getSession(req)) {
       return redirect(res, "/login", 302, { "Cache-Control": "no-store" });
     }
-    return redirect(res, "/admin", 302, { "Cache-Control": "no-store" });
+    return serveStatic("/index.html", res, { "Cache-Control": "no-store" });
   }
 
   if (url.pathname === "/admin" || url.pathname === "/admin.html") {

@@ -154,43 +154,43 @@ export function seed(db) {
   `);
 
   insertAccount.run(
-    "å®¶éä¸»çµè¡¨",
+    "家里主电表",
     "electricity",
-    "ç½ä¸å½ç½",
+    "网上国网",
     "330100009845",
     "138****0001",
-    "å¯ç  + ç­ä¿¡",
+    "密码 + 短信",
     "active",
     1,
-    "æµæ±å±æ°æ·",
+    "浙江居民户",
     iso("2026-05-07T07:36:00+08:00"),
     now,
     now
   );
   insertAccount.run(
-    "å®¶éæ°´å¡è´¦æ·",
+    "家里水务账户",
     "water",
-    "æ­æ°´ç½ä¸å",
+    "杭水网上厅",
     "HZW2208411",
     "139****1002",
-    "è´¦å·å¯ç ",
+    "账号密码",
     "active",
     1,
-    "è´¦åå¨æåæ°æ®",
+    "账单周期型数据",
     iso("2026-05-07T07:02:00+08:00"),
     now,
     now
   );
   insertAccount.run(
-    "å®¶éçæ°è´¦æ·",
+    "家里燃气账户",
     "gas",
-    "19æå¡å / æ­çç ",
+    "19服务厅 / 杭燃码",
     "GAS8841220",
-    "å¬ä¼å·è¾å©ç»å½",
-    "å¬ä¼å·è¾å©",
+    "公众号辅助登录",
+    "公众号辅助",
     "attention",
     1,
-    "å¤é´è¡¥æå¤±è´¥ 1 æ¬¡",
+    "夜间补抓失败 1 次",
     iso("2026-05-07T07:12:00+08:00"),
     now,
     now
@@ -207,7 +207,7 @@ export function seed(db) {
   `);
 
   insertJob.run(
-    "çµåæ¥éé",
+    "电力日采集",
     "electricity",
     "06:30",
     1,
@@ -216,12 +216,12 @@ export function seed(db) {
     iso("2026-05-08T06:30:00+08:00"),
     0,
     10,
-    "æ¨æ¥çµéå·²çæ",
+    "昨日电量已生成",
     now,
     now
   );
   insertJob.run(
-    "æ°´å¡è´¦åéé",
+    "水务账单采集",
     "water",
     "07:00",
     1,
@@ -230,12 +230,12 @@ export function seed(db) {
     iso("2026-05-08T07:00:00+08:00"),
     0,
     10,
-    "æ¬è½®æ æ°å¢è´¦å",
+    "本轮无新增账单",
     now,
     now
   );
   insertJob.run(
-    "çæ°æ¸åéé",
+    "燃气清单采集",
     "gas",
     "07:30",
     1,
@@ -244,7 +244,7 @@ export function seed(db) {
     iso("2026-05-07T22:00:00+08:00"),
     1,
     15,
-    "è¡¥æè¯¦ç»é¡µå¤±è´¥ï¼å¾å¤é´éè¯",
+    "补抓详细页失败，待夜间重试",
     now,
     now
   );
@@ -280,7 +280,7 @@ export function seed(db) {
       item[4],
       item[5],
       "CNY",
-      "ç½ä¸å½ç½",
+      "网上国网",
       "bill",
       0,
       "confirmed",
@@ -289,10 +289,10 @@ export function seed(db) {
   }
 
   const waterMonth = [
-    ["2026-01-31", "2026-01-01", "2026-01-31", 7, "mÂ³", 18.6],
-    ["2026-02-28", "2026-02-01", "2026-02-28", 7.2, "mÂ³", 19.4],
-    ["2026-03-31", "2026-03-01", "2026-03-31", 7.8, "mÂ³", 20.8],
-    ["2026-04-30", "2026-04-01", "2026-04-30", 8, "mÂ³", 22.1]
+    ["2026-01-31", "2026-01-01", "2026-01-31", 7, "m³", 18.6],
+    ["2026-02-28", "2026-02-01", "2026-02-28", 7.2, "m³", 19.4],
+    ["2026-03-31", "2026-03-01", "2026-03-31", 7.8, "m³", 20.8],
+    ["2026-04-30", "2026-04-01", "2026-04-30", 8, "m³", 22.1]
   ];
   for (const item of waterMonth) {
     insertBill.run(
@@ -305,7 +305,7 @@ export function seed(db) {
       item[4],
       item[5],
       "CNY",
-      "æ­æ°´ç½ä¸å",
+      "杭水网上厅",
       "bill",
       0,
       "confirmed",
@@ -330,7 +330,7 @@ export function seed(db) {
       item[4],
       item[5],
       "CNY",
-      "19æå¡å",
+      "19服务厅",
       item[0] === "2026-05-07" ? "statement" : "bill",
       0,
       item[0] === "2026-05-07" ? "pending" : "confirmed",
@@ -355,7 +355,7 @@ export function seed(db) {
       "kWh",
       item[2],
       "CNY",
-      "ç½ä¸å½ç½",
+      "网上国网",
       0,
       now
     );
@@ -365,29 +365,29 @@ export function seed(db) {
     INSERT INTO push_logs (push_type, target, title, status, details, pushed_at)
     VALUES (?, ?, ?, ?, ?, ?)
   `);
-  insertPush.run("daily", "å®¶åº­éç¥åºç¨", "05-07 æ¥æ¥", "success", "çµåæ¥æ¥ä¸çæ°æéå·²æ¨é", iso("2026-05-07T08:00:00+08:00"));
-  insertPush.run("alert", "å®¶åº­éç¥åºç¨", "çæ°è¡¥æåè­¦", "success", "å·²éç¥å¤é´è¡¥æå¤±è´¥", iso("2026-05-07T08:16:00+08:00"));
+  insertPush.run("daily", "家庭通知应用", "05-07 日报", "success", "电力日报与燃气提醒已推送", iso("2026-05-07T08:00:00+08:00"));
+  insertPush.run("alert", "家庭通知应用", "燃气补抓告警", "success", "已通知夜间补抓失败", iso("2026-05-07T08:16:00+08:00"));
 
   const insertLog = db.prepare(`
     INSERT INTO system_logs (level, module_name, message, details, created_at)
     VALUES (?, ?, ?, ?, ?)
   `);
-  insertLog.run("error", "gas-collector", "19 æå¡åè¡¥æå¤±è´¥ï¼é¡µé¢äºæ¬¡è·³è½¬è¶æ¶", toJson({ retryPlannedAt: "2026-05-07T22:00:00+08:00" }), iso("2026-05-07T08:16:00+08:00"));
-  insertLog.run("info", "notifier", "æ¥æ¥æ¨éè³å®¶åº­éç¥åºç¨æå", toJson({ pushType: "daily" }), iso("2026-05-07T08:00:00+08:00"));
-  insertLog.run("info", "electricity-collector", "æ¨æ¥çµéåæ¥çµè´¹å·²åå¥ daily_records", toJson({ usageDate: "2026-05-06" }), iso("2026-05-07T07:36:00+08:00"));
+  insertLog.run("error", "gas-collector", "19 服务厅补抓失败，页面二次跳转超时", toJson({ retryPlannedAt: "2026-05-07T22:00:00+08:00" }), iso("2026-05-07T08:16:00+08:00"));
+  insertLog.run("info", "notifier", "日报推送至家庭通知应用成功", toJson({ pushType: "daily" }), iso("2026-05-07T08:00:00+08:00"));
+  insertLog.run("info", "electricity-collector", "昨日电量和日电费已写入 daily_records", toJson({ usageDate: "2026-05-06" }), iso("2026-05-07T07:36:00+08:00"));
 
   const settings = db.prepare(`
     INSERT INTO settings (key, value, updated_at)
     VALUES (?, ?, ?)
   `);
-  settings.run("site", toJson({ title: "å®¶ç¨è½èè´¦æ¬", timezone: "Asia/Shanghai" }), now);
+  settings.run("site", toJson({ title: "家用能耗账本", timezone: "Asia/Shanghai" }), now);
   settings.run("wecom", toJson({
     corpId: "ww9c8f2a******",
     agentId: "1000012",
     enabled: true,
     dailyPushTime: "08:00",
     monthlyPushTime: "01 09:00",
-    recipients: ["å®¶åº­éç¥åºç¨"]
+    recipients: ["家庭通知应用"]
   }), now);
   settings.run("statistics", toJson({
     defaultGranularity: "month",
@@ -615,18 +615,18 @@ export function getOverview(db) {
 
   const recentActivity = [
     {
-      title: "çæ°æ¸åå·²æ´æ°",
-      summary: "05-07 07:12 æ£æµå°æ°æ¸åï¼éé¢ Â¥34.20ï¼ç­å¾è¡¥æè¯¦ç»è´¦åé¡µã",
+      title: "燃气清单已更新",
+      summary: "05-07 07:12 检测到新清单，金额 ¥34.20，等待补抓详细账单页。",
       type: "gas"
     },
     {
-      title: "æ¨æ¥çµéçææå",
-      summary: "05-07 06:38 å·²åå¥æ¥è®°å½ï¼æ¨æ¥ 12.8 kWhï¼æ¥çµè´¹ Â¥5.63ã",
+      title: "昨日电量生成成功",
+      summary: "05-07 06:38 已写入日记录，昨日 12.8 kWh，日电费 ¥5.63。",
       type: "electricity"
     },
     {
-      title: "ä¼ä¸å¾®ä¿¡æ¥æ¥å·²æ¨é",
-      summary: "05-07 08:00 æ¨éå°å®¶åº­éç¥åºç¨ï¼ç¶ææåã",
+      title: "企业微信日报已推送",
+      summary: "05-07 08:00 推送到家庭通知应用，状态成功。",
       type: "push"
     }
   ];
@@ -635,39 +635,39 @@ export function getOverview(db) {
     summary: {
       totalAmount: total,
       currency: "CNY",
-      monthLabel: "2026å¹´5æ",
+      monthLabel: "2026年5月",
       lastSyncedAt: "2026-05-07T07:36:00+08:00"
     },
     utilityCards: [
       {
         utilityType: "electricity",
-        label: "çµè´¹",
+        label: "电费",
         amount: electricityCurrent,
         usage: {
           value: 132.4,
           unit: "kWh"
         },
-        detail: "æ¨æ¥çµé 12.8 kWh Â· é¶æ¢¯äºæ¡£è¾¹ç¼"
+        detail: "昨日电量 12.8 kWh · 阶梯二档边缘"
       },
       {
         utilityType: "water",
-        label: "æ°´è´¹",
+        label: "水费",
         amount: waterCurrent,
         usage: {
           value: latestWaterBill?.usage_value ?? 8,
-          unit: latestWaterBill?.usage_unit ?? "mÂ³"
+          unit: latestWaterBill?.usage_unit ?? "m³"
         },
-        detail: "è´¦åå¨æ 04-01 è³ 04-30 Â· ææ çå®æ¥æ²çº¿"
+        detail: "账单周期 04-01 至 04-30 · 暂无真实日曲线"
       },
       {
         utilityType: "gas",
-        label: "çæ°è´¹",
+        label: "燃气费",
         amount: gasCurrent,
         usage: {
           value: null,
           unit: null
         },
-        detail: "ææ°æ¸åå·²å¥åº Â· è´¦ååæ°æ® Â· æ¯æå¨æç»è®¡"
+        detail: "最新清单已入库 · 账单型数据 · 支持周期统计"
       }
     ],
     highlights: {
@@ -679,19 +679,19 @@ export function getOverview(db) {
       },
       water: {
         message: latestWaterBill
-          ? `æè¿è´¦å Â¥${latestWaterBill.amount.toFixed(2)}ï¼${latestWaterBill.usage_value}${latestWaterBill.usage_unit}`
-          : "ææ æ°è´¦å"
+          ? `最近账单 ¥${latestWaterBill.amount.toFixed(2)}，${latestWaterBill.usage_value}${latestWaterBill.usage_unit}`
+          : "暂无新账单"
       },
       gas: {
-        message: latestGasBill ? `åç°æ°${latestGasBill.record_type === "statement" ? "æ¸å" : "è´¦å"} +Â¥${latestGasBill.amount.toFixed(2)}` : "ææ æ°è´¦å"
+        message: latestGasBill ? `发现新${latestGasBill.record_type === "statement" ? "清单" : "账单"} +¥${latestGasBill.amount.toFixed(2)}` : "暂无新账单"
       }
     },
     charts: {
       monthlyTrend: [
-        { period: "1æ", electricity: 148.8, water: 18.6, gas: 92.5 },
-        { period: "2æ", electricity: 153.2, water: 19.4, gas: 96.2 },
-        { period: "3æ", electricity: 168.9, water: 20.8, gas: 103.4 },
-        { period: "4æ", electricity: 168.2, water: 22.1, gas: 105.7 }
+        { period: "1月", electricity: 148.8, water: 18.6, gas: 92.5 },
+        { period: "2月", electricity: 153.2, water: 19.4, gas: 96.2 },
+        { period: "3月", electricity: 168.9, water: 20.8, gas: 103.4 },
+        { period: "4月", electricity: 168.2, water: 22.1, gas: 105.7 }
       ],
       composition: [
         { utilityType: "electricity", amount: electricityCurrent },
@@ -748,8 +748,8 @@ export function getAnalytics(db, filters = {}) {
       changeRate: Number(changeRate.toFixed(1))
     },
     notes: [
-      "çµåæ¯æçå®æ¥æ°æ®ï¼åæé¡µå¯æ©å±å°æ¥è§å¾ã",
-      "æ°´åçå½åé»è®¤æè´¦åå¨ææ±æ»ï¼ä¸ä¼ªè£ä¸ºçå®æ¥è´¦åã"
+      "电力支持真实日数据，分析页可扩展到日视图。",
+      "水和燃当前默认按账单周期汇总，不伪装为真实日账单。"
     ]
   };
 }
@@ -773,11 +773,11 @@ export function getAdminSummary(db) {
     accounts,
     jobs,
     health: [
-      { name: "API æå¡", status: "ok" },
-      { name: "æ°æ®åºè¿æ¥", status: "ok" },
-      { name: "Playwright æµè§å¨æ± ", status: "ok" },
-      { name: "ä¼ä¸å¾®ä¿¡ Token", status: "ok" },
-      { name: "çæ°è¡¥æä»»å¡", status: "error" }
+      { name: "API 服务", status: "ok" },
+      { name: "数据库连接", status: "ok" },
+      { name: "Playwright 浏览器池", status: "ok" },
+      { name: "企业微信 Token", status: "ok" },
+      { name: "燃气补抓任务", status: "error" }
     ],
     wecom,
     statistics,
@@ -801,10 +801,10 @@ export function runJob(db, utilityType) {
     UPDATE sync_jobs
     SET last_run_at = ?, last_status = ?, status_hint = ?, updated_at = ?
     WHERE utility_type = ?
-  `).run(now, "success", "å·²æå¨è§¦åå¹¶æ¨¡ææå", now, utilityType);
+  `).run(now, "success", "已手动触发并模拟成功", now, utilityType);
   db.prepare(`
     INSERT INTO system_logs (level, module_name, message, details, created_at)
     VALUES (?, ?, ?, ?, ?)
-  `).run("info", `${utilityType}-collector`, "æ¶å°æå¨è§¦åä»»å¡è¯·æ±", toJson({ source: "admin-action" }), now);
+  `).run("info", `${utilityType}-collector`, "收到手动触发任务请求", toJson({ source: "admin-action" }), now);
   return db.prepare("SELECT * FROM sync_jobs WHERE utility_type = ?").get(utilityType);
 }

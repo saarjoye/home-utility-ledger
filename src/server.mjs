@@ -203,7 +203,7 @@ function getSession(req) {
   };
 }
 
-function requireAdminApi(req, res) {
+function requireSessionJson(req, res) {
   const session = getSession(req);
   if (!session) {
     sendJson(res, 401, {
@@ -241,24 +241,24 @@ function serveStatic(reqPath, res, extraHeaders = {}) {
 function buildAdminView(summary) {
   const metrics = [
     {
-      label: "ä»æ¥ä»»å¡",
+      label: "今日任务",
       value: String(summary.metrics.jobRunsToday ?? 0),
-      hint: "å·²æ§è¡åæ­¥ä»»å¡"
+      hint: "已执行同步任务"
     },
     {
-      label: "è´¦æ·æ°é",
+      label: "账户数量",
       value: String(summary.metrics.accountCount ?? 0),
-      hint: "å·²æ¥å¥çµæ°´çè´¦æ·"
+      hint: "已接入电水燃账户"
     },
     {
-      label: "æ¨éæ¬¡æ°",
+      label: "推送次数",
       value: String(summary.metrics.pushCount ?? 0),
-      hint: "ä¼ä¸å¾®ä¿¡æ¶æ¯æ¨éç´¯è®¡"
+      hint: "企业微信消息推送累计"
     },
     {
-      label: "å¥åº·è¯å",
+      label: "健康评分",
       value: `${Number(summary.metrics.healthScore ?? 0).toFixed(1)}%`,
-      hint: "åå°è¿è¡å¥åº·åº¦"
+      hint: "后台运行健康度"
     }
   ];
 
@@ -281,8 +281,8 @@ function buildAdminView(summary) {
   }
 
   return {
-    title: "å®¶åº­æ°´çµçè´¦æ¬",
-    subtitle: "ééãç»è®¡ä¸éç¥åå°",
+    title: "家庭水电燃账本",
+    subtitle: "采集、统计与通知后台",
     metrics,
     pending,
     accounts: summary.accounts || [],
@@ -362,6 +362,11 @@ async function routeApi(req, res, url) {
     }, { "Cache-Control": "no-store" });
   }
 
+  const protectedSession = requireSessionJson(req, res);
+  if (!protectedSession) {
+    return;
+  }
+
   if (req.method === "GET" && url.pathname === "/api/site") {
     return sendJson(res, 200, {
       site: getSiteSettings(db)
@@ -394,11 +399,6 @@ async function routeApi(req, res, url) {
   }
 
   if (url.pathname.startsWith("/api/admin/")) {
-    const session = requireAdminApi(req, res);
-    if (!session) {
-      return;
-    }
-
     if (req.method === "GET" && url.pathname === "/api/admin/summary") {
       return sendJson(res, 200, buildAdminView(getAdminSummary(db)), { "Cache-Control": "no-store" });
     }
@@ -464,15 +464,18 @@ const server = http.createServer(async (req, res) => {
     return serveStatic("/login.html", res, { "Cache-Control": "no-store" });
   }
 
+  if (url.pathname === "/" || url.pathname === "/dashboard" || url.pathname === "/index.html") {
+    if (!getSession(req)) {
+      return redirect(res, "/login", 302, { "Cache-Control": "no-store" });
+    }
+    return redirect(res, "/admin", 302, { "Cache-Control": "no-store" });
+  }
+
   if (url.pathname === "/admin" || url.pathname === "/admin.html") {
     if (!getSession(req)) {
       return redirect(res, "/login", 302, { "Cache-Control": "no-store" });
     }
     return serveStatic("/admin.html", res, { "Cache-Control": "no-store" });
-  }
-
-  if (url.pathname === "/dashboard") {
-    return serveStatic("/index.html", res);
   }
 
   return serveStatic(url.pathname, res);

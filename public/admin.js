@@ -12,6 +12,7 @@
   });
 
   async function init() {
+    bindNavigation();
     bindPageActions();
     await loadPage();
   }
@@ -280,6 +281,73 @@
         }
       }
     });
+  }
+
+  function bindNavigation() {
+    const navItems = Array.from(document.querySelectorAll(".nav-group .nav-item[href^='#']"));
+    if (!navItems.length) {
+      return;
+    }
+
+    const sections = navItems
+      .map((item) => {
+        const targetId = item.getAttribute("href")?.slice(1);
+        const section = targetId ? document.getElementById(targetId) : null;
+        if (!targetId || !section) {
+          return null;
+        }
+        return {
+          item,
+          targetId,
+          section
+        };
+      })
+      .filter(Boolean);
+
+    if (!sections.length) {
+      return;
+    }
+
+    const setActive = (targetId) => {
+      for (const section of sections) {
+        section.item.classList.toggle("active", section.targetId === targetId);
+      }
+    };
+
+    const resolveActiveSection = () => {
+      const visible = sections
+        .map((section) => ({
+          targetId: section.targetId,
+          top: section.section.getBoundingClientRect().top
+        }))
+        .filter((section) => section.top <= 160)
+        .sort((left, right) => Math.abs(left.top) - Math.abs(right.top));
+
+      if (visible.length) {
+        return visible[0].targetId;
+      }
+
+      return sections[0].targetId;
+    };
+
+    for (const section of sections) {
+      section.item.addEventListener("click", () => {
+        setActive(section.targetId);
+      });
+    }
+
+    const syncFromLocation = () => {
+      const hashTargetId = window.location.hash.slice(1);
+      if (hashTargetId && sections.some((section) => section.targetId === hashTargetId)) {
+        setActive(hashTargetId);
+        return;
+      }
+      setActive(resolveActiveSection());
+    };
+
+    window.addEventListener("hashchange", syncFromLocation);
+    window.addEventListener("scroll", syncFromLocation, { passive: true });
+    syncFromLocation();
   }
 
   async function logout() {

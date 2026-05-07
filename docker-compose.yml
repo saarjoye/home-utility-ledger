@@ -11,6 +11,11 @@ services:
       APP_ENTRY: ${APP_ENTRY:-src/server.mjs}
       DB_PATH: ${DB_PATH:-data/app.db}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-change-me-admin}
+      SESSION_SECRET: ${SESSION_SECRET:-change-me-session-secret}
+      SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-168}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
     ports:
       - "${PORT:-3000}:${PORT:-3000}"
     volumes:

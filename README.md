@@ -1,127 +1,96 @@
-# Water and Utility Docker Deployment
+# Home Utility Ledger
 
-这个项目目前按 **Docker 优先部署** 方式整理，目标是你不需要在宿主机额外安装 `Node.js`、`npm` 或数据库。
+å®¶åº­çµãæ°´ãçè´¦åééä¸ç»è®¡åå°ç Docker å MVPã
 
-当前容器假设已经和代码实现对齐：
+å½åä»åºå·²ç»è¡¥ä¸æå°å¯ç¨ç Web ç»å½é­ç¯ï¼å¹¶æåå° UI è°æ´ä¸ºæ¥è¿ä½ åèé¡¹ç® `MPæä»¶-lucky&wafè­¦åéç¥/new` çæ·±è²æ§å¶å°é£æ ¼ã
 
-- Runtime: `node:24-alpine`
-- App entry: `src/server.mjs`
-- Database: SQLite，默认文件 `data/app.db`
-- Exposed port: `3000`
-- Health endpoint: `/api/health`
+## è¿è¡æ¹å¼
 
-## 最推荐用法
-
-直接启动：
+ç´æ¥å¯å¨ï¼
 
 ```bash
 docker compose up -d --build
 ```
 
-查看状态：
+æ¥çç¶æï¼
 
 ```bash
 docker compose ps
 docker compose logs -f app
 ```
 
-停止：
+åæ­¢ï¼
 
 ```bash
 docker compose down
 ```
 
-启动后默认访问：
+## è®¿é®å°å
 
-```text
-http://localhost:3000
-http://localhost:3000/admin
-http://localhost:3000/api/health
-```
+- åå°ï¼`http://localhost:3000/`
+- åå°ï¼`http://localhost:3000/admin`
+- ç»å½é¡µï¼`http://localhost:3000/login`
+- å¥åº·æ£æ¥ï¼`http://localhost:3000/api/health`
 
-## 持久化说明
+## ç»å½éç½®
 
-`docker-compose.yml` 已经配置了命名卷：
-
-- `utility_data:/app/data`
-
-这意味着：
-
-- 容器删除后，SQLite 数据仍然保留
-- 重新 `docker compose up` 不会丢失已有账单和配置数据
-
-如果你要彻底清空数据：
-
-```bash
-docker compose down -v
-```
-
-## 可选环境变量
-
-默认情况下，不提供 `.env` 也能启动，因为 `docker-compose.yml` 已经带了默认值。
-
-如果你要自定义，可以复制：
-
-```bash
-cp .env.example .env
-```
-
-支持变量如下：
+è¯·è³å°ä¿®æ¹ä»¥ä¸ç¯å¢åéï¼ä¸è¦ç´æ¥ä½¿ç¨é»è®¤å¼ï¼
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `NODE_ENV` | `production` | 运行模式 |
-| `HOST` | `0.0.0.0` | 容器监听地址 |
-| `PORT` | `3000` | 容器服务端口 |
-| `APP_ENTRY` | `src/server.mjs` | 启动入口 |
-| `DB_PATH` | `data/app.db` | SQLite 文件路径 |
-| `LOG_LEVEL` | `info` | 日志级别 |
+| `ADMIN_USERNAME` | `admin` | åå°ç®¡çåè´¦å· |
+| `ADMIN_PASSWORD` | `change-me-admin` | åå°ç®¡çåå¯ç  |
+| `SESSION_SECRET` | `change-me-session-secret` | Session ç­¾åå¯é¥ |
+| `SESSION_TTL_HOURS` | `168` | ç»å½ææææ¶é¿ï¼åä½å°æ¶ |
+| `COOKIE_SECURE` | `false` | çäº§ç¯å¢èµ° HTTPS æ¶å»ºè®®æ¹ä¸º `true` |
 
-## 单独使用 Docker 命令
+å®æ´ç¤ºä¾è§ `.env.example`ã
 
-如果你不用 Compose，也可以：
+## æ°æ®æä¹å
 
-构建镜像：
+å½å `docker-compose.yml` é»è®¤ä½¿ç¨å½åå·ï¼
 
-```bash
-docker build -t water-mvp .
+- `utility_data:/app/data`
+
+å®¹å¨å SQLite æ°æ®åºé»è®¤è·¯å¾ï¼
+
+- `/app/data/app.db`
+
+å¦æä½ è¦æ¹ä¸ºå®¿ä¸»æºç®å½æè½½ï¼å¯ä»¥æå·æ¹æç±»ä¼¼ï¼
+
+```yaml
+volumes:
+  - /home/docker/home-utility-ledger/data:/app/data
 ```
 
-启动容器：
+## å½åç»å½å®ç°
 
-```bash
-docker run -d \
-  --name water-mvp \
-  -p 3000:3000 \
-  -e NODE_ENV=production \
-  -e HOST=0.0.0.0 \
-  -e PORT=3000 \
-  -e APP_ENTRY=src/server.mjs \
-  -e DB_PATH=data/app.db \
-  -v water_mvp_data:/app/data \
-  water-mvp
-```
+- ç»å½å¥å£ï¼`/login`
+- ç»å½æ¥å£ï¼`POST /api/auth/login`
+- ç»åºæ¥å£ï¼`POST /api/auth/logout`
+- å½åç»å½æï¼`GET /api/auth/me`
+- åä¿æ¤é¡µé¢ï¼`/admin`
+- åä¿æ¤æ¥å£ï¼`/api/admin/*`
 
-## 当前 Docker 交付内容
+ææ¯æ¹æ¡ï¼
 
-- `Dockerfile`
-- `docker-compose.yml`
-- `.env.example`
-- `.dockerignore`
+- åç®¡çåè´¦å·ï¼æ¥èªç¯å¢åé
+- æå¡ç«¯ Session Cookie
+- Cookie ä¸º `HttpOnly`
+- Session è®°å½ä¿å­å¨ SQLite ç `sessions` è¡¨ä¸­
 
-## 当前已处理的容器化细节
+## é¡¹ç®ç»æ
 
-- 启动入口已对齐到 `src/server.mjs`
-- 不依赖宿主机安装 Node
-- 默认不强依赖 `.env`
-- 已加 SQLite 数据持久化卷
-- 已加容器健康检查
-- 已加 `.dockerignore`，避免把调研临时文件打进镜像
+- `src/server.mjs`ï¼HTTP æå¡ãç»å½é´æãéæèµæºè·¯ç±
+- `src/db.mjs`ï¼SQLite æ°æ®ãè¿ç§»ãåå°æè¦æ¥è¯¢
+- `public/login.html`ï¼ç»å½é¡µ
+- `public/admin.html`ï¼åå°ç®¡çé¡µ
+- `public/admin.css`ï¼åå°ä¸ç»å½é¡µæ ·å¼
+- `public/admin.js`ï¼åå°äº¤äº
+- `public/login.js`ï¼ç»å½é¡µäº¤äº
 
-## 已知边界
+## å·²ç¥è¾¹ç
 
-- 当前本机环境没有安装 `Docker`，所以这轮只能完成 Docker 文件和部署路径校准，**没有在本机执行实际构建或容器启动验证**
-- 如果你后续把项目入口改掉，只需要同步修改：
-  - `.env.example`
-  - `Dockerfile`
-  - `docker-compose.yml`
+- å½ååªå®ç°äºåç®¡çåç»å½ï¼ä¸æ¯æå¤ç¨æ·åè§è²æé
+- åå° `/dashboard` ç¸å³æ§é¡µé¢ä»æ¯ MVP å½¢æï¼å½åéç¹æ¯åå°ç»å½åç®¡çå°
+- å½åç¯å¢æ²¡æ Dockerï¼æ¬è½®æªåå®¹å¨åå®æºéªè¯ï¼åªåäºæ¬å° Node çº§å«çä»£ç åæ¥å£æ ¡éª

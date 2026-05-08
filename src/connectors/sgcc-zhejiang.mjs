@@ -200,6 +200,91 @@ async function waitForVueApp(page, timeoutMs) {
   }
 }
 
+async function getVueTreeDebugInfo(page) {
+  try {
+    return await page.evaluate(() => {
+      const root = document.getElementById("app")?.__vue__;
+      if (!root) {
+        return {
+          route: null,
+          componentNames: []
+        };
+      }
+
+      const queue = [root, root.firstElementChild?.__vue__].filter(Boolean);
+      const seen = new Set();
+      const componentNames = [];
+      let route = null;
+
+      while (queue.length) {
+        const vm = queue.shift();
+        if (!vm || seen.has(vm._uid)) {
+          continue;
+        }
+        seen.add(vm._uid);
+
+        const name = String(vm.$options?.name || "").trim();
+        if (name && componentNames.length < 16 && !componentNames.includes(name)) {
+          componentNames.push(name);
+        }
+
+        if (!route && vm.$route) {
+          route = {
+            path: vm.$route.path || null,
+            fullPath: vm.$route.fullPath || null,
+            name: vm.$route.name || null
+          };
+        }
+
+        for (const child of vm.$children || []) {
+          queue.push(child);
+        }
+      }
+
+      return {
+        route,
+        componentNames
+      };
+    });
+  } catch {
+    return {
+      route: null,
+      componentNames: []
+    };
+  }
+}
+
+async function waitForVueData(page, predicate, { timeoutMs, stage, missingHint }) {
+  try {
+    await page.waitForFunction(predicate, { timeout: timeoutMs });
+  } catch {
+    const [pageInfo, vueInfo] = await Promise.all([
+      getPageDebugInfo(page),
+      getVueTreeDebugInfo(page)
+    ]);
+
+    if (isLikelySgccLoginState(pageInfo)) {
+      throw new Error(`网上国网页面在${stage}阶段回到了登录态，当前导入的 CK / storageJson 很可能已失效。当前地址：${pageInfo.url}`);
+    }
+    if (isLikelySecurityBlock(pageInfo)) {
+      throw new Error(`网上国网页面在${stage}阶段触发了安全校验或风控，当前容器内无法继续提取数据。当前地址：${pageInfo.url}`);
+    }
+
+    const routeText = vueInfo.route?.fullPath || vueInfo.route?.path || vueInfo.route?.name || "未知";
+    const componentText = vueInfo.componentNames.length ? vueInfo.componentNames.join(", ") : "未识别到组件";
+
+    throw new Error(
+      `网上国网页面已加载框架，但在${stage}阶段未等到账单数据组件。` +
+      `可能原因：${missingHint}。` +
+      `当前地址：${pageInfo.url}；` +
+      `页面标题：${pageInfo.title || "未知"}；` +
+      `页面摘要：${pageInfo.bodyText || "空"}；` +
+      `当前路由：${routeText}；` +
+      `已识别组件：${componentText}`
+    );
+  }
+}
+
 async function findVueComponentData(page, predicateSource) {
   return page.evaluate((predicateText) => {
     const predicate = new Function("vm", `return (${predicateText})(vm);`);
@@ -244,7 +329,7 @@ async function loadSummarySnapshot(page, config) {
     timeout: config.timeoutMs
   });
   await waitForVueApp(page, config.timeoutMs);
-  await page.waitForFunction(() => {
+  await waitForVueData(page, () => {
     const root = document.getElementById("app")?.__vue__;
     const queue = [root, root?.firstElementChild?.__vue__].filter(Boolean);
     const seen = new Set();
@@ -262,7 +347,11 @@ async function loadSummarySnapshot(page, config) {
       }
     }
     return false;
-  }, { timeout: config.timeoutMs });
+  }, {
+    timeoutMs: config.timeoutMs,
+    stage: "电费账单页",
+    missingHint: "当前会话可能没有进入正确账单页、目标户号账单列表为空，或国网页面结构发生变化"
+  });
 
   return findVueComponentData(page, "(vm) => (vm.$options?.name || '') === 'eleSum' && Array.isArray(vm._data?.billNumberList)");
 }
@@ -273,7 +362,7 @@ async function loadChargeSnapshot(page, config) {
     timeout: config.timeoutMs
   });
   await waitForVueApp(page, config.timeoutMs);
-  await page.waitForFunction(() => {
+  await waitForVueData(page, () => {
     const root = document.getElementById("app")?.__vue__;
     const queue = [root, root?.firstElementChild?.__vue__].filter(Boolean);
     const seen = new Set();
@@ -291,7 +380,11 @@ async function loadChargeSnapshot(page, config) {
       }
     }
     return false;
-  }, { timeout: config.timeoutMs });
+  }, {
+    timeoutMs: config.timeoutMs,
+    stage: "电量分析页",
+    missingHint: "当前会话可能没有进入正确电量分析页、页面数据尚未返回，或国网页面结构发生变化"
+  });
 
   return findVueComponentData(page, "(vm) => Boolean(vm._data?.powerData) && Array.isArray(vm._data?.sevenEleList)");
 }

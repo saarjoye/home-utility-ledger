@@ -30,6 +30,13 @@ function resolveCookieHeader(credentials = {}) {
   return trimText(credentials.cookieHeader || credentials.cookies);
 }
 
+function resolveWaterUnid(credentials = {}) {
+  return trimText(
+    credentials.unid ||
+    credentials.UNID
+  ).replace(/^"+|"+$/g, "");
+}
+
 function buildUrl(baseUrl, requestPath) {
   return new URL(requestPath, baseUrl).toString();
 }
@@ -55,7 +62,7 @@ function buildRequestPayload(config, credentials, extraPayload = {}) {
   return {
     token: resolveWaterToken(credentials),
     waterCorpId: Number(credentials.waterCorpId || config.waterCorpId || 3),
-    UNID: trimText(credentials.unid),
+    UNID: resolveWaterUnid(credentials),
     areaId: Number(credentials.areaId ?? config.areaId ?? 0),
     accountType: trimText(credentials.accountType || config.accountType || "XJ"),
     apiType: trimText(credentials.apiType || config.apiType || "PC"),
@@ -88,6 +95,9 @@ async function postWaterJson(config, credentials, requestPath, payload) {
   }
 
   if (data?.status !== 0 && data?.status !== "0" && !Array.isArray(data?.data)) {
+    if (/参数类型错误/.test(String(data?.message || ""))) {
+      throw new Error("杭水接口返回“参数类型错误”。通常是因为缺少或填写错误的 waterUserToken / UNID。请在后台补充正确的 waterUserToken、UNID，必要时再补 Cookie。");
+    }
     throw new Error(data?.message || `Hangzhou Water request rejected at ${requestPath}`);
   }
 
@@ -255,9 +265,13 @@ export async function testHzWaterConnection({ account, credentials }) {
   const config = getWaterConfig();
   const token = resolveWaterToken(credentials);
   const cookieHeader = resolveCookieHeader(credentials);
+  const unid = resolveWaterUnid(credentials);
 
   if (!token && !cookieHeader) {
     throw new Error("Hangzhou Water requires sessionToken/waterUserToken or cookieHeader");
+  }
+  if (!unid) {
+    throw new Error("杭水测试还需要 UNID。请在后台账号里补充 UNID 后再测试。");
   }
 
   const { rows, meter } = await fetchMeters(config, account, credentials);
@@ -274,6 +288,7 @@ export async function testHzWaterConnection({ account, credentials }) {
       utilityType: account.utilityType,
       tokenConfigured: Boolean(token),
       cookieConfigured: Boolean(cookieHeader),
+      unidConfigured: Boolean(unid),
       meterCount: rows.length,
       meterNumber
     }
@@ -282,6 +297,10 @@ export async function testHzWaterConnection({ account, credentials }) {
 
 export async function collectHzWaterBills({ account, credentials }) {
   const config = getWaterConfig();
+  const unid = resolveWaterUnid(credentials);
+  if (!unid) {
+    throw new Error("杭水采集还需要 UNID。请在后台账号里补充 UNID 后再试一次。");
+  }
   const { rows, meter } = await fetchMeters(config, account, credentials);
   const meterNumber = getMeterNumber(meter, account, credentials);
   if (!meterNumber) {

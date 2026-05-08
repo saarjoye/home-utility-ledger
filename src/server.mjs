@@ -262,6 +262,7 @@ const providerDefinitionsForAdminUi = [
     ],
     credentialFields: [
       { key: "sessionToken", label: "waterUserToken", type: "password", required: false },
+      { key: "unid", label: "UNID", type: "text", required: true },
       { key: "cookieHeader", label: "登录 Cookie（CK）", type: "password", required: false },
       { key: "meterNumber", label: "水表号", type: "text", required: false }
     ]

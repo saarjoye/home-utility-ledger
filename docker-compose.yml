@@ -1,7 +1,6 @@
 services:
   app:
     image: ghcr.io/saarjoye/home-utility-ledger:main
-    container_name: home-utility-ledger
     environment:
       NODE_ENV: ${NODE_ENV:-production}
       HOST: ${HOST:-0.0.0.0}

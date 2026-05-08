@@ -4,7 +4,6 @@ services:
       context: .
       dockerfile: Dockerfile
     image: home-utility-ledger:local
-    container_name: home-utility-ledger-local
     environment:
       NODE_ENV: ${NODE_ENV:-production}
       HOST: ${HOST:-0.0.0.0}

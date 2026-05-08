@@ -575,6 +575,117 @@ input {
   gap: 10px;
 }
 
+.guide-shell {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  background:
+    radial-gradient(circle at top right, rgba(54, 211, 153, 0.1), transparent 26%),
+    rgba(12, 18, 25, 0.72);
+}
+
+.guide-head,
+.guide-code-head,
+.guide-step-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.guide-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(56, 189, 248, 0.28);
+  background: rgba(56, 189, 248, 0.08);
+  color: var(--blue);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.guide-step-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.guide-step-card,
+.guide-code-panel {
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  background: rgba(16, 26, 37, 0.92);
+}
+
+.guide-step-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+
+.guide-step-index {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), #6ef0c0);
+  color: #092118;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.guide-step-visual {
+  margin-left: auto;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.guide-step-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.guide-step-body {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.guide-code-panel {
+  overflow: hidden;
+}
+
+.guide-code-panel-muted {
+  border-style: dashed;
+  opacity: 0.88;
+}
+
+.guide-code-head {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.guide-code-panel pre {
+  margin: 0;
+  padding: 14px;
+  max-height: 260px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #d9f6eb;
+  font-size: 12px;
+  line-height: 1.65;
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -767,7 +878,8 @@ input {
 
   .section-grid,
   .account-admin-grid,
-  .hero-panel {
+  .hero-panel,
+  .guide-step-grid {
     grid-template-columns: 1fr;
   }
 }

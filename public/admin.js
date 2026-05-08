@@ -691,8 +691,7 @@ async function copyImportSnippetForCurrentProvider() {
     await navigator.clipboard.writeText(preset.snippet);
     setFeedback(feedback, "is-success", "提取脚本已复制。到对应服务商的已登录页面打开控制台执行，然后把输出结果粘贴回来。");
   } catch {
-    const input = document.getElementById("importPayloadInput");
-    input.value = preset.snippet;
+    document.getElementById("importPayloadInput").value = preset.snippet;
     setFeedback(feedback, "is-success", "浏览器剪贴板不可用，已把提取脚本放进文本框。你可以手动复制后到对应页面执行。");
   }
 }
@@ -801,7 +800,7 @@ function syncLoginMethods(preferredLoginMethod, preferredCredentialDraft = null)
 
 function applyProviderPresentation(providerDef) {
   const form = providerDef?.form || {};
-  const importPreset = getImportPreset(providerDef);
+  const preset = getImportPreset(providerDef);
   const accountNoField = document.getElementById("accountNoField");
   const loginNameField = document.getElementById("loginNameField");
   const notesInput = document.getElementById("accountNotesInput");
@@ -809,6 +808,7 @@ function applyProviderPresentation(providerDef) {
   const loginNameLabel = loginNameField?.querySelector("span");
   const accountNoInput = document.getElementById("accountNoInput");
   const copyButton = document.getElementById("copyImportSnippetButton");
+  const snippetPanel = document.getElementById("importSnippetPanel");
 
   if (accountNoLabel) {
     accountNoLabel.textContent = form.accountNoLabel || "账户标识";
@@ -830,13 +830,42 @@ function applyProviderPresentation(providerDef) {
   setText("providerGuideTitle", "接入说明");
   setText("providerGuideText", form.credentialIntro || "请先选择服务商，系统会给出最小可用字段说明。");
   setText("providerGuideExtra", form.sessionGuide || "");
-  setText("importHelperTitle", importPreset.title || "会话导入辅助");
-  setText("importHelperHint", importPreset.hint || "请先选择服务商。");
-  setText("importAcceptedFormats", importPreset.acceptedFormats || "");
+
+  setText("importHelperTitle", preset.title || "会话导入辅助");
+  setText("importHelperHint", preset.hint || "请先选择服务商。");
+  setText("importAcceptedFormats", preset.acceptedFormats || "");
+
+  setText("importGuideTitle", `${preset.title || "会话导入"}分步说明`);
+  setText("importSnippetLabel", preset.snippetLabel || "提取脚本");
+  document.getElementById("importSnippetPreview").textContent = preset.snippet || "当前服务商没有浏览器提取脚本。请按上方说明直接粘贴 HAR、Cookie 或原始 JSON。";
 
   if (copyButton) {
-    copyButton.disabled = !importPreset.snippet;
+    copyButton.disabled = !preset.snippet;
   }
+  if (snippetPanel) {
+    snippetPanel.classList.toggle("guide-code-panel-muted", !preset.snippet);
+  }
+
+  renderImportGuideSteps(preset.steps || []);
+}
+
+function renderImportGuideSteps(steps) {
+  const container = document.getElementById("importGuideSteps");
+  if (!steps.length) {
+    container.innerHTML = `<div class="empty-state">请先选择服务商，系统会显示对应的操作步骤。</div>`;
+    return;
+  }
+
+  container.innerHTML = steps.map((step, index) => `
+    <article class="guide-step-card">
+      <div class="guide-step-top">
+        <span class="guide-step-index">${index + 1}</span>
+        <span class="guide-step-visual">${escapeHtml(step.visual || "步骤")}</span>
+      </div>
+      <div class="guide-step-title">${escapeHtml(step.title || `步骤 ${index + 1}`)}</div>
+      <p class="guide-step-body">${escapeHtml(step.body || "")}</p>
+    </article>
+  `).join("");
 }
 
 function bindNavigation() {
@@ -912,7 +941,6 @@ function deriveHealthScore() {
   if (!healthItems.length) {
     return "--";
   }
-
   const okCount = healthItems.filter((item) => String(item.status || "").toLowerCase() === "ok").length;
   return `${Math.round((okCount / healthItems.length) * 100)}%`;
 }

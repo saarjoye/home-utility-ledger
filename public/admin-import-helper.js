@@ -87,8 +87,26 @@ export function getImportPreset(providerDef) {
   if (key === "sgcc_zhejiang") {
     return {
       title: "国网会话导入",
-      hint: "推荐方式：在已登录的 95598 / 网上国网页面打开控制台，执行提取脚本，再把输出结果粘贴到这里。",
-      acceptedFormats: "支持：提取脚本输出、整段 Cookie、storageJson JSON。",
+      hint: "适用于已在浏览器登录 95598 / 网上国网的场景。建议直接在账单相关页面执行提取脚本。",
+      acceptedFormats: "支持粘贴：提取脚本输出、整段 Cookie、storageJson JSON。",
+      steps: [
+        {
+          title: "打开已登录页面",
+          visual: "浏览器页",
+          body: "在 Edge 中打开已经登录好的网上国网页面，优先停留在“电费账单”或“电量分析”页面。"
+        },
+        {
+          title: "打开控制台",
+          visual: "F12 / Console",
+          body: "按 F12，切到 Console（控制台）页签。第一次打开时若有安全提示，按浏览器提示允许粘贴。"
+        },
+        {
+          title: "执行脚本并复制输出",
+          visual: "复制 JSON",
+          body: "把下面的提取脚本粘进去执行。浏览器会输出一段 JSON，把整段复制后粘贴回后台即可。"
+        }
+      ],
+      snippetLabel: "国网页面提取脚本",
       snippet: `(() => {
   const dump = (storage) => {
     const result = {};
@@ -113,8 +131,26 @@ export function getImportPreset(providerDef) {
   if (key === "hzwater_online") {
     return {
       title: "杭水会话导入",
-      hint: "推荐方式：在已登录的杭水网上营业厅页面打开控制台，执行提取脚本，再把输出结果粘贴到这里。",
-      acceptedFormats: "支持：提取脚本输出、包含 token 的 requestPara JSON、仅 token 文本。",
+      hint: "适用于已在杭水网上营业厅登录的场景。当前真正关键的是 `waterUserToken`。",
+      acceptedFormats: "支持粘贴：提取脚本输出、包含 token 的 requestPara JSON、仅 token 文本。",
+      steps: [
+        {
+          title: "打开已登录杭水页面",
+          visual: "网上营业厅",
+          body: "在 Edge 中打开已经登录好的杭水网上营业厅，保持当前登录状态不要刷新退出。"
+        },
+        {
+          title: "进入控制台执行脚本",
+          visual: "F12 / Console",
+          body: "按 F12，切到 Console（控制台），执行下面脚本。它会读取 localStorage 里的 `waterUserToken`。"
+        },
+        {
+          title: "回粘结果",
+          visual: "waterUserToken",
+          body: "复制脚本输出的 JSON，回到后台粘贴。系统会自动识别 `waterUserToken`，能识别到水表号时也会一起带上。"
+        }
+      ],
+      snippetLabel: "杭水页面提取脚本",
       snippet: `(() => {
   const dump = (storage) => {
     const result = {};
@@ -136,8 +172,26 @@ export function getImportPreset(providerDef) {
   if (key === "hzgas_servicehall") {
     return {
       title: "燃气会话导入",
-      hint: "燃气更适合粘贴 HAR 文件全文、请求头里的 Cookie，或已经抓到的 userNo / 户号。",
-      acceptedFormats: "支持：HAR 文件 JSON、`logged_in_user=...` Cookie、`userNo=...` 文本。",
+      hint: "燃气更适合直接粘贴 HAR、Cookie 或 userNo。因为查询过程依赖微信公众号环境，不建议承诺浏览器脚本一键提取。",
+      acceptedFormats: "支持粘贴：HAR 文件 JSON、`logged_in_user=...` Cookie、`userNo=...` 文本。",
+      steps: [
+        {
+          title: "优先准备 HAR 或抓包结果",
+          visual: "HAR",
+          body: "如果你已经从手机或代理工具导出了 HAR，直接把 HAR 全文粘贴到后台即可。"
+        },
+        {
+          title: "或者粘贴 CK + userNo",
+          visual: "Cookie / userNo",
+          body: "如果你已经单独拿到了 `logged_in_user=...` Cookie 和燃气户号 `userNo`，也可以直接粘贴原始文本。"
+        },
+        {
+          title: "自动识别并回填",
+          visual: "自动拆字段",
+          body: "系统会优先识别 `logged_in_user` 和 `userNo`。识别不到时会明确告诉你缺的是 CK 还是 userNo。"
+        }
+      ],
+      snippetLabel: "燃气导入说明",
       snippet: ""
     };
   }
@@ -146,6 +200,8 @@ export function getImportPreset(providerDef) {
     title: "会话导入辅助",
     hint: "请先选择服务商。",
     acceptedFormats: "",
+    steps: [],
+    snippetLabel: "",
     snippet: ""
   };
 }

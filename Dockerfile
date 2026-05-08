@@ -1,4 +1,4 @@
-FROM node:24-alpine
+FROM node:24-bookworm-slim
 
 WORKDIR /app
 
@@ -7,14 +7,21 @@ ENV HOST=0.0.0.0
 ENV PORT=3000
 ENV APP_ENTRY=src/server.mjs
 ENV DB_PATH=data/app.db
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
-RUN apk add --no-cache su-exec
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends gosu ca-certificates git \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY package.json ./
+RUN npm install --omit=dev \
+  && npx playwright install --with-deps chromium
 
 COPY --chown=node:node . .
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
-RUN mkdir -p /app/data \
-  && chown -R node:node /app \
+RUN mkdir -p /app/data /ms-playwright \
+  && chown -R node:node /app /ms-playwright \
   && chmod +x /usr/local/bin/docker-entrypoint.sh
 
 EXPOSE 3000

@@ -23,9 +23,15 @@ import {
   listPushLogs,
   listSystemLogs,
   getSiteSettings,
+  getAccountById,
+  createAccount,
+  updateAccount,
+  deleteAccount,
   toggleAccountStatus,
-  runJob
+  runJob,
+  createBillRecord
 } from "./db.mjs";
+import { runCollectionJob, startCollectionScheduler, testCollectionConnection } from "./job-runner.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -49,6 +55,7 @@ migrate(db);
 seed(db);
 repairStoredText(db);
 deleteExpiredSessions(db);
+const scheduler = startCollectionScheduler(db);
 
 if (process.argv.includes("--seed-only")) {
   console.log(`Database is ready at ${dbPath}`);
@@ -63,6 +70,174 @@ const mimeTypes = {
   ".png": "image/png",
   ".svg": "image/svg+xml"
 };
+
+const providerDefinitions = [
+  {
+    key: "sgcc_zhejiang",
+    utilityType: "electricity",
+    provider: "网上国网（浙江）",
+    loginMethods: ["账号密码", "密码 + 短信"],
+    credentialFields: [
+      { key: "username", label: "登录账号", type: "text", required: true },
+      { key: "password", label: "登录密码", type: "password", required: true },
+      { key: "mobile", label: "手机号", type: "text", required: false },
+      { key: "customerNo", label: "客户编号", type: "text", required: false }
+    ]
+  },
+  {
+    key: "hzwater_online",
+    utilityType: "water",
+    provider: "杭水网上厅",
+    loginMethods: ["账号密码"],
+    credentialFields: [
+      { key: "username", label: "登录账号", type: "text", required: true },
+      { key: "password", label: "登录密码", type: "password", required: true },
+      { key: "mobile", label: "手机号", type: "text", required: false }
+    ]
+  },
+  {
+    key: "hzgas_servicehall",
+    utilityType: "gas",
+    provider: "19服务厅 / 杭燃码",
+    loginMethods: ["公众号辅助", "账号密码"],
+    credentialFields: [
+      { key: "username", label: "登录账号", type: "text", required: false },
+      { key: "password", label: "登录密码", type: "password", required: false },
+      { key: "mobile", label: "手机号", type: "text", required: true },
+      { key: "notes", label: "登录说明", type: "text", required: false }
+    ]
+  }
+];
+
+Object.assign(providerDefinitions[0], {
+  provider: "网上国网（浙江）",
+  loginMethods: ["账号密码", "密码 + 短信", "登录态 Cookie"],
+  credentialFields: [
+    { key: "username", label: "登录账号", type: "text", required: false },
+    { key: "password", label: "登录密码", type: "password", required: false },
+    { key: "mobile", label: "手机号", type: "text", required: false },
+    { key: "customerNo", label: "客户编号", type: "text", required: false },
+    { key: "cookieHeader", label: "Cookie Header", type: "password", required: false }
+  ]
+});
+
+Object.assign(providerDefinitions[1], {
+  provider: "杭水网上营业厅",
+  loginMethods: ["登录态 Token", "登录态 Cookie", "手机号 + 验证码 + 密码"],
+  credentialFields: [
+    { key: "sessionToken", label: "waterUserToken", type: "password", required: false },
+    { key: "cookieHeader", label: "Cookie Header", type: "password", required: false },
+    { key: "meterNumber", label: "水表号", type: "text", required: false },
+    { key: "mobile", label: "手机号", type: "text", required: false },
+    { key: "password", label: "登录密码", type: "password", required: false }
+  ]
+});
+
+Object.assign(providerDefinitions[2], {
+  provider: "杭州燃气 19 服务厅",
+  loginMethods: ["微信公众号", "支付宝生活号", "待接入"],
+  credentialFields: [
+    { key: "mobile", label: "手机号", type: "text", required: false },
+    { key: "notes", label: "登录说明", type: "text", required: false }
+  ]
+});
+
+Object.assign(providerDefinitions[0], {
+  provider: "网上国网（浙江）",
+  loginMethods: ["账号密码", "密码 + 短信", "会话导入 Cookie + Storage"],
+  credentialFields: [
+    { key: "username", label: "登录账号", type: "text", required: false },
+    { key: "password", label: "登录密码", type: "password", required: false },
+    { key: "mobile", label: "手机号", type: "text", required: false },
+    { key: "customerNo", label: "客户编号", type: "text", required: false },
+    { key: "cookieHeader", label: "Cookie Header", type: "password", required: false },
+    { key: "storageJson", label: "Storage JSON", type: "password", required: false }
+  ]
+});
+
+Object.assign(providerDefinitions[1], {
+  provider: "杭水网上营业厅",
+  loginMethods: ["会话导入 Token", "会话导入 Cookie", "手机号 + 验证码 + 密码"],
+  credentialFields: [
+    { key: "sessionToken", label: "waterUserToken", type: "password", required: false },
+    { key: "cookieHeader", label: "Cookie Header", type: "password", required: false },
+    { key: "meterNumber", label: "水表号", type: "text", required: false },
+    { key: "mobile", label: "手机号", type: "text", required: false },
+    { key: "password", label: "登录密码", type: "password", required: false }
+  ]
+});
+
+Object.assign(providerDefinitions[2], {
+  provider: "杭州燃气 19 服务厅",
+  loginMethods: ["微信公众号", "支付宝生活号", "待接入"],
+  credentialFields: [
+    { key: "mobile", label: "手机号", type: "text", required: false },
+    { key: "notes", label: "登录说明", type: "text", required: false }
+  ]
+});
+
+const providerDefinitionsForApi = [
+  {
+    key: "sgcc_zhejiang",
+    utilityType: "electricity",
+    provider: "网上国网（浙江）",
+    loginMethods: [
+      "账号密码",
+      "密码 + 短信",
+      "会话导入 Cookie + Storage"
+    ],
+    credentialFields: [
+      { key: "username", label: "登录账号", type: "text", required: false },
+      { key: "password", label: "登录密码", type: "password", required: false },
+      { key: "mobile", label: "手机号", type: "text", required: false },
+      { key: "customerNo", label: "客户编号", type: "text", required: false },
+      { key: "cookieHeader", label: "Cookie Header", type: "password", required: false },
+      { key: "storageJson", label: "Storage JSON", type: "password", required: false },
+      { key: "loginUrl", label: "登录页面 URL", type: "text", required: false },
+      { key: "homeUrl", label: "首页 URL", type: "text", required: false },
+      { key: "summaryUrl", label: "电费概览 URL", type: "text", required: false },
+      { key: "chargeUrl", label: "电量分析 URL", type: "text", required: false },
+      { key: "usernameSelector", label: "账号输入框选择器", type: "text", required: false },
+      { key: "passwordSelector", label: "密码输入框选择器", type: "text", required: false },
+      { key: "submitSelector", label: "登录按钮选择器", type: "text", required: false },
+      { key: "successWaitFor", label: "登录成功等待选择器", type: "text", required: false }
+    ]
+  },
+  {
+    key: "hzwater_online",
+    utilityType: "water",
+    provider: "杭水网上营业厅",
+    loginMethods: [
+      "会话导入 Token",
+      "会话导入 Cookie",
+      "手机号 + 验证码 + 密码"
+    ],
+    credentialFields: [
+      { key: "sessionToken", label: "waterUserToken", type: "password", required: false },
+      { key: "cookieHeader", label: "Cookie Header", type: "password", required: false },
+      { key: "meterNumber", label: "水表号", type: "text", required: false },
+      { key: "mobile", label: "手机号", type: "text", required: false },
+      { key: "password", label: "登录密码", type: "password", required: false }
+    ]
+  },
+  {
+    key: "hzgas_servicehall",
+    utilityType: "gas",
+    provider: "杭州天然气服务号",
+    loginMethods: [
+      "微信公众号会话",
+      "支付宝生活号",
+      "待接入"
+    ],
+    credentialFields: [
+      { key: "cookieHeader", label: "Cookie Header", type: "password", required: false },
+      { key: "address", label: "户号地址", type: "text", required: false },
+      { key: "orgId", label: "Org ID", type: "text", required: false },
+      { key: "mobile", label: "手机号", type: "text", required: false },
+      { key: "notes", label: "登录说明", type: "text", required: false }
+    ]
+  }
+];
 
 function writeResponse(res, statusCode, headers = {}, body = "") {
   res.writeHead(statusCode, headers);
@@ -107,6 +282,71 @@ async function readBody(req) {
   } catch {
     return {};
   }
+}
+
+function normalizeText(value) {
+  return String(value ?? "").trim();
+}
+
+function normalizeOptionalText(value) {
+  const text = normalizeText(value);
+  return text || null;
+}
+
+function normalizeAccountPayload(body = {}) {
+  const status = normalizeText(body.status) || "active";
+  return {
+    name: normalizeText(body.name),
+    utilityType: normalizeText(body.utilityType),
+    provider: normalizeText(body.provider),
+    accountNo: normalizeText(body.accountNo),
+    loginName: normalizeOptionalText(body.loginName),
+    loginMethod: normalizeText(body.loginMethod),
+    status,
+    isPrimary: Boolean(body.isPrimary),
+    notes: normalizeOptionalText(body.notes),
+    credentials: body.credentials && typeof body.credentials === "object" ? body.credentials : {},
+    clearCredentials: Boolean(body.clearCredentials)
+  };
+}
+
+function validateAccountPayload(payload) {
+  const errors = [];
+  if (!payload.name) errors.push("name is required");
+  if (!payload.utilityType) errors.push("utilityType is required");
+  if (!payload.provider) errors.push("provider is required");
+  if (!payload.accountNo) errors.push("accountNo is required");
+  if (!payload.loginMethod) errors.push("loginMethod is required");
+  if (!["electricity", "water", "gas"].includes(payload.utilityType)) {
+    errors.push("utilityType must be electricity, water, or gas");
+  }
+  return errors;
+}
+
+function normalizeBillPayload(body = {}) {
+  return {
+    accountId: Number(body.accountId),
+    statementDate: normalizeText(body.statementDate),
+    periodStart: normalizeOptionalText(body.periodStart),
+    periodEnd: normalizeOptionalText(body.periodEnd),
+    usageValue: body.usageValue === "" || body.usageValue === undefined || body.usageValue === null ? null : Number(body.usageValue),
+    usageUnit: normalizeOptionalText(body.usageUnit),
+    amount: Number(body.amount),
+    currency: normalizeText(body.currency) || "CNY",
+    sourceChannel: normalizeText(body.sourceChannel) || "manual",
+    recordType: normalizeText(body.recordType) || "bill",
+    status: normalizeText(body.status) || "confirmed",
+    isEstimated: Boolean(body.isEstimated)
+  };
+}
+
+function validateBillPayload(payload) {
+  const errors = [];
+  if (!Number.isInteger(payload.accountId) || payload.accountId <= 0) errors.push("accountId is required");
+  if (!payload.statementDate) errors.push("statementDate is required");
+  if (!Number.isFinite(payload.amount)) errors.push("amount must be a number");
+  if (payload.usageValue !== null && !Number.isFinite(payload.usageValue)) errors.push("usageValue must be a number when provided");
+  return errors;
 }
 
 function parseCookies(req) {
@@ -405,12 +645,74 @@ async function routeApi(req, res, url) {
       return sendJson(res, 200, buildAdminView(getAdminSummary(db)), { "Cache-Control": "no-store" });
     }
 
+    if (req.method === "GET" && url.pathname === "/api/admin/providers") {
+      return sendJson(res, 200, { items: providerDefinitionsForApi }, { "Cache-Control": "no-store" });
+    }
+
     if (req.method === "GET" && url.pathname === "/api/admin/accounts") {
       return sendJson(res, 200, { items: listAccounts(db) }, { "Cache-Control": "no-store" });
     }
 
+    if (req.method === "GET" && url.pathname.match(/^\/api\/admin\/accounts\/\d+$/)) {
+      const accountId = Number(url.pathname.split("/")[4]);
+      const account = getAccountById(db, accountId);
+      if (!account) {
+        return sendJson(res, 404, { error: "Account not found" }, { "Cache-Control": "no-store" });
+      }
+      return sendJson(res, 200, { item: account }, { "Cache-Control": "no-store" });
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/admin/accounts") {
+      const body = await readBody(req);
+      const payload = normalizeAccountPayload(body);
+      const errors = validateAccountPayload(payload);
+      if (errors.length) {
+        return sendJson(res, 400, { errors }, { "Cache-Control": "no-store" });
+      }
+      const item = createAccount(db, payload);
+      return sendJson(res, 201, { item }, { "Cache-Control": "no-store" });
+    }
+
+    if (req.method === "PUT" && url.pathname.match(/^\/api\/admin\/accounts\/\d+$/)) {
+      const accountId = Number(url.pathname.split("/")[4]);
+      const body = await readBody(req);
+      const payload = normalizeAccountPayload(body);
+      const errors = validateAccountPayload(payload);
+      if (errors.length) {
+        return sendJson(res, 400, { errors }, { "Cache-Control": "no-store" });
+      }
+      const item = updateAccount(db, accountId, payload);
+      if (!item) {
+        return sendJson(res, 404, { error: "Account not found" }, { "Cache-Control": "no-store" });
+      }
+      return sendJson(res, 200, { item }, { "Cache-Control": "no-store" });
+    }
+
+    if (req.method === "DELETE" && url.pathname.match(/^\/api\/admin\/accounts\/\d+$/)) {
+      const accountId = Number(url.pathname.split("/")[4]);
+      const item = deleteAccount(db, accountId);
+      if (!item) {
+        return sendJson(res, 404, { error: "Account not found" }, { "Cache-Control": "no-store" });
+      }
+      return sendJson(res, 200, { item }, { "Cache-Control": "no-store" });
+    }
+
     if (req.method === "GET" && url.pathname === "/api/admin/jobs") {
       return sendJson(res, 200, { items: listJobs(db) }, { "Cache-Control": "no-store" });
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/admin/bills") {
+      const body = await readBody(req);
+      const payload = normalizeBillPayload(body);
+      const errors = validateBillPayload(payload);
+      if (errors.length) {
+        return sendJson(res, 400, { errors }, { "Cache-Control": "no-store" });
+      }
+      const item = createBillRecord(db, payload);
+      if (!item) {
+        return sendJson(res, 404, { error: "Account not found" }, { "Cache-Control": "no-store" });
+      }
+      return sendJson(res, 201, { item }, { "Cache-Control": "no-store" });
     }
 
     if (req.method === "GET" && url.pathname === "/api/admin/logs") {
@@ -426,13 +728,27 @@ async function routeApi(req, res, url) {
       return sendJson(res, 200, { item: updated }, { "Cache-Control": "no-store" });
     }
 
+    if (req.method === "POST" && url.pathname.match(/^\/api\/admin\/accounts\/\d+\/test$/)) {
+      const accountId = Number(url.pathname.split("/")[4]);
+      const account = getAccountById(db, accountId);
+      if (!account) {
+        return sendJson(res, 404, { error: "Account not found" }, { "Cache-Control": "no-store" });
+      }
+      try {
+        const result = await testCollectionConnection(db, account);
+        return sendJson(res, 200, { item: result }, { "Cache-Control": "no-store" });
+      } catch (error) {
+        return sendJson(res, 400, { error: error.message || "Connection test failed" }, { "Cache-Control": "no-store" });
+      }
+    }
+
     if (req.method === "POST" && url.pathname === "/api/admin/run-job") {
       const body = await readBody(req);
       if (!body.utilityType) {
         return sendJson(res, 400, { error: "utilityType is required" }, { "Cache-Control": "no-store" });
       }
-      const job = runJob(db, body.utilityType);
-      return sendJson(res, 200, { item: job }, { "Cache-Control": "no-store" });
+      const result = await runCollectionJob(db, body.utilityType, "admin-action");
+      return sendJson(res, 200, { item: result }, { "Cache-Control": "no-store" });
     }
   }
 
@@ -486,3 +802,10 @@ const server = http.createServer(async (req, res) => {
 server.listen(port, host, () => {
   console.log(`Home utility ledger is running on http://${host}:${port}`);
 });
+
+for (const signal of ["SIGINT", "SIGTERM"]) {
+  process.on(signal, () => {
+    scheduler.stop();
+    process.exit(0);
+  });
+}

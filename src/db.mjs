@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import crypto from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 
 const DEFAULT_DB_PATH = path.resolve(process.cwd(), "data", "app.db");
@@ -25,6 +26,68 @@ function fromJson(value, fallback = null) {
 
 function iso(dateString) {
   return new Date(dateString).toISOString();
+}
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+function accountSecretKey(secret = process.env.ACCOUNT_CREDENTIALS_SECRET || process.env.SESSION_SECRET || "change-me-account-credentials-secret") {
+  return crypto.createHash("sha256").update(String(secret), "utf8").digest();
+}
+
+function encryptSecretPayload(value) {
+  const payload = JSON.stringify(value ?? {});
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", accountSecretKey(), iv);
+  const encrypted = Buffer.concat([cipher.update(payload, "utf8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return JSON.stringify({
+    iv: iv.toString("base64"),
+    tag: tag.toString("base64"),
+    data: encrypted.toString("base64")
+  });
+}
+
+function decryptSecretPayload(value) {
+  if (!value) {
+    return {};
+  }
+  const payload = fromJson(value, null);
+  if (!payload?.iv || !payload?.tag || !payload?.data) {
+    return {};
+  }
+  try {
+    const decipher = crypto.createDecipheriv(
+      "aes-256-gcm",
+      accountSecretKey(),
+      Buffer.from(payload.iv, "base64")
+    );
+    decipher.setAuthTag(Buffer.from(payload.tag, "base64"));
+    const decrypted = Buffer.concat([
+      decipher.update(Buffer.from(payload.data, "base64")),
+      decipher.final()
+    ]).toString("utf8");
+    return fromJson(decrypted, {});
+  } catch {
+    return {};
+  }
+}
+
+function sanitizeCredentialPayload(value) {
+  const source = value && typeof value === "object" ? value : {};
+  const next = {};
+  for (const [key, item] of Object.entries(source)) {
+    if (item === undefined || item === null) {
+      continue;
+    }
+    const trimmed = typeof item === "string" ? item.trim() : item;
+    if (trimmed === "") {
+      continue;
+    }
+    next[key] = trimmed;
+  }
+  return next;
 }
 
 function looksLikeMojibake(value) {
@@ -192,6 +255,28 @@ export function migrate(db) {
       created_at TEXT NOT NULL,
       expires_at TEXT NOT NULL,
       last_seen_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS account_secrets (
+      account_id INTEGER PRIMARY KEY,
+      credentials_ciphertext TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS collector_runs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      utility_type TEXT NOT NULL,
+      account_id INTEGER,
+      provider TEXT,
+      status TEXT NOT NULL,
+      trigger_source TEXT NOT NULL,
+      summary TEXT,
+      details TEXT,
+      started_at TEXT NOT NULL,
+      finished_at TEXT,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (account_id) REFERENCES accounts(id)
     );
   `);
 }
@@ -646,14 +731,21 @@ function mapAccount(row) {
     status: row.status,
     isPrimary: Boolean(row.is_primary),
     notes: row.notes,
-    lastSyncedAt: row.last_synced_at
+    lastSyncedAt: row.last_synced_at,
+    credentialConfigured: Boolean(row.has_credentials)
   };
 }
 
 export function listAccounts(db) {
   return db.prepare(`
-    SELECT *
-    FROM accounts
+    SELECT
+      a.*,
+      EXISTS (
+        SELECT 1
+        FROM account_secrets s
+        WHERE s.account_id = a.id
+      ) AS has_credentials
+    FROM accounts a
     ORDER BY
       CASE utility_type
         WHEN 'electricity' THEN 1
@@ -661,6 +753,253 @@ export function listAccounts(db) {
         ELSE 3
       END
   `).all().map(mapAccount);
+}
+
+export function getAccountById(db, accountId) {
+  const row = db.prepare(`
+    SELECT
+      a.*,
+      EXISTS (
+        SELECT 1
+        FROM account_secrets s
+        WHERE s.account_id = a.id
+      ) AS has_credentials
+    FROM accounts a
+    WHERE a.id = ?
+    LIMIT 1
+  `).get(accountId);
+  return row ? mapAccount(row) : null;
+}
+
+export function createAccount(db, payload) {
+  const now = nowIso();
+  const result = db.prepare(`
+    INSERT INTO accounts (
+      name, utility_type, provider, account_no, login_name, login_method,
+      status, is_primary, notes, last_synced_at, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    payload.name,
+    payload.utilityType,
+    payload.provider,
+    payload.accountNo,
+    payload.loginName || null,
+    payload.loginMethod,
+    payload.status || "active",
+    payload.isPrimary ? 1 : 0,
+    payload.notes || null,
+    payload.lastSyncedAt || null,
+    now,
+    now
+  );
+
+  if (payload.credentials && Object.keys(payload.credentials).length) {
+    upsertAccountSecrets(db, result.lastInsertRowid, payload.credentials);
+  }
+
+  return getAccountById(db, result.lastInsertRowid);
+}
+
+export function updateAccount(db, accountId, payload) {
+  const existing = getAccountById(db, accountId);
+  if (!existing) {
+    return null;
+  }
+
+  db.prepare(`
+    UPDATE accounts
+    SET
+      name = ?,
+      utility_type = ?,
+      provider = ?,
+      account_no = ?,
+      login_name = ?,
+      login_method = ?,
+      status = ?,
+      is_primary = ?,
+      notes = ?,
+      updated_at = ?
+    WHERE id = ?
+  `).run(
+    payload.name,
+    payload.utilityType,
+    payload.provider,
+    payload.accountNo,
+    payload.loginName || null,
+    payload.loginMethod,
+    payload.status || existing.status || "active",
+    payload.isPrimary ? 1 : 0,
+    payload.notes || null,
+    nowIso(),
+    accountId
+  );
+
+  if (payload.credentials) {
+    if (Object.keys(payload.credentials).length) {
+      upsertAccountSecrets(db, accountId, payload.credentials);
+    } else if (payload.clearCredentials) {
+      deleteAccountSecrets(db, accountId);
+    }
+  }
+
+  return getAccountById(db, accountId);
+}
+
+export function deleteAccount(db, accountId) {
+  const existing = getAccountById(db, accountId);
+  if (!existing) {
+    return null;
+  }
+  const refs = db.prepare(`
+    SELECT
+      (SELECT COUNT(*) FROM bill_records WHERE account_id = ?) AS bill_count,
+      (SELECT COUNT(*) FROM daily_records WHERE account_id = ?) AS daily_count
+  `).get(accountId, accountId);
+
+  if ((refs.bill_count || 0) > 0 || (refs.daily_count || 0) > 0) {
+    const archivedNotes = [existing.notes, "已归档：保留历史账单，禁止硬删"].filter(Boolean).join(" | ");
+    db.prepare(`
+      UPDATE accounts
+      SET status = 'disabled', notes = ?, updated_at = ?
+      WHERE id = ?
+    `).run(archivedNotes, nowIso(), accountId);
+    return getAccountById(db, accountId);
+  }
+
+  deleteAccountSecrets(db, accountId);
+  db.prepare("DELETE FROM accounts WHERE id = ?").run(accountId);
+  return existing;
+}
+
+export function upsertAccountSecrets(db, accountId, credentials) {
+  const sanitized = sanitizeCredentialPayload(credentials);
+  if (!Object.keys(sanitized).length) {
+    return false;
+  }
+
+  db.prepare(`
+    INSERT INTO account_secrets (account_id, credentials_ciphertext, updated_at)
+    VALUES (?, ?, ?)
+    ON CONFLICT(account_id) DO UPDATE SET
+      credentials_ciphertext = excluded.credentials_ciphertext,
+      updated_at = excluded.updated_at
+  `).run(
+    accountId,
+    encryptSecretPayload(sanitized),
+    nowIso()
+  );
+
+  return true;
+}
+
+export function deleteAccountSecrets(db, accountId) {
+  db.prepare("DELETE FROM account_secrets WHERE account_id = ?").run(accountId);
+}
+
+export function getAccountCredentials(db, accountId) {
+  const row = db.prepare(`
+    SELECT credentials_ciphertext
+    FROM account_secrets
+    WHERE account_id = ?
+    LIMIT 1
+  `).get(accountId);
+  return decryptSecretPayload(row?.credentials_ciphertext);
+}
+
+export function listAccountsByUtilityType(db, utilityType) {
+  return listAccounts(db).filter((item) => item.utilityType === utilityType && item.status !== "disabled");
+}
+
+export function getJobByUtilityType(db, utilityType) {
+  return db.prepare(`
+    SELECT id, name, utility_type, schedule_time, enabled, last_run_at, last_status,
+           next_run_at, retries, retry_interval_minutes, status_hint
+    FROM sync_jobs
+    WHERE utility_type = ?
+    LIMIT 1
+  `).get(utilityType);
+}
+
+export function updateJobRunState(db, utilityType, payload) {
+  const current = getJobByUtilityType(db, utilityType);
+  if (!current) {
+    return null;
+  }
+
+  const hasRealExecution = payload.lastRunAt !== undefined;
+  const retries = !hasRealExecution
+    ? Number(current.retries || 0)
+    : payload.status === "success"
+      ? 0
+      : Number(current.retries || 0) + 1;
+  const nextRunAt = payload.nextRunAt || null;
+  const lastRunAt = payload.lastRunAt === undefined ? current.last_run_at : payload.lastRunAt;
+  const status = payload.status || current.last_status || "idle";
+  const statusHint = payload.statusHint || current.status_hint;
+  db.prepare(`
+    UPDATE sync_jobs
+    SET
+      last_run_at = ?,
+      last_status = ?,
+      next_run_at = ?,
+      retries = ?,
+      status_hint = ?,
+      updated_at = ?
+    WHERE utility_type = ?
+  `).run(
+    lastRunAt,
+    status,
+    nextRunAt,
+    retries,
+    statusHint,
+    nowIso(),
+    utilityType
+  );
+
+  return getJobByUtilityType(db, utilityType);
+}
+
+export function recordCollectorRun(db, payload) {
+  const startedAt = payload.startedAt || nowIso();
+  const result = db.prepare(`
+    INSERT INTO collector_runs (
+      utility_type, account_id, provider, status, trigger_source, summary, details, started_at, finished_at, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    payload.utilityType,
+    payload.accountId || null,
+    payload.provider || null,
+    payload.status,
+    payload.triggerSource || "manual",
+    payload.summary || null,
+    payload.details ? toJson(payload.details) : null,
+    startedAt,
+    payload.finishedAt || null,
+    startedAt
+  );
+
+  return db.prepare("SELECT * FROM collector_runs WHERE id = ?").get(result.lastInsertRowid);
+}
+
+export function addSystemLog(db, payload) {
+  db.prepare(`
+    INSERT INTO system_logs (level, module_name, message, details, created_at)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(
+    payload.level,
+    payload.moduleName,
+    payload.message,
+    payload.details ? toJson(payload.details) : null,
+    payload.createdAt || nowIso()
+  );
+}
+
+export function updateAccountLastSyncedAt(db, accountId, lastSyncedAt = nowIso()) {
+  db.prepare(`
+    UPDATE accounts
+    SET last_synced_at = ?, updated_at = ?
+    WHERE id = ?
+  `).run(lastSyncedAt, nowIso(), accountId);
 }
 
 export function listJobs(db) {
@@ -778,13 +1117,20 @@ function sumAmount(db, utilityType, from, to, source = "bill_records", dateColum
 }
 
 export function getOverview(db) {
-  const thisMonthFrom = "2026-05-01";
-  const thisMonthTo = "2026-05-31";
+  const now = new Date();
+  const monthFrom = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString().slice(0, 10);
+  const monthTo = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0)).toISOString().slice(0, 10);
 
-  const electricityCurrent = sumAmount(db, "electricity", thisMonthFrom, thisMonthTo);
-  const waterCurrent = sumAmount(db, "water", "2026-04-01", "2026-04-30");
-  const gasCurrent = sumAmount(db, "gas", "2026-04-08", "2026-05-07");
+  const electricityCurrent = sumAmount(db, "electricity", monthFrom, monthTo, "daily_records", "usage_date");
+  const waterCurrent = sumAmount(db, "water", monthFrom, monthTo);
+  const gasCurrent = sumAmount(db, "gas", monthFrom, monthTo);
   const total = electricityCurrent + waterCurrent + gasCurrent;
+
+  const latestSync = db.prepare(`
+    SELECT MAX(last_synced_at) AS last_synced_at
+    FROM accounts
+    WHERE last_synced_at IS NOT NULL
+  `).get();
 
   const yesterday = db.prepare(`
     SELECT usage_date, usage_value, usage_unit, amount
@@ -832,8 +1178,8 @@ export function getOverview(db) {
     summary: {
       totalAmount: total,
       currency: "CNY",
-      monthLabel: "2026年5月",
-      lastSyncedAt: "2026-05-07T07:36:00+08:00"
+      monthLabel: `${now.getUTCFullYear()}年${String(now.getUTCMonth() + 1)}月`,
+      lastSyncedAt: latestSync?.last_synced_at || null
     },
     utilityCards: [
       {
@@ -988,20 +1334,148 @@ export function toggleAccountStatus(db, accountId) {
     return null;
   }
   const nextStatus = row.status === "disabled" ? "active" : "disabled";
-  db.prepare("UPDATE accounts SET status = ?, updated_at = ? WHERE id = ?").run(nextStatus, new Date().toISOString(), accountId);
-  return db.prepare("SELECT * FROM accounts WHERE id = ?").get(accountId);
+  db.prepare("UPDATE accounts SET status = ?, updated_at = ? WHERE id = ?").run(nextStatus, nowIso(), accountId);
+  return getAccountById(db, accountId);
 }
 
 export function runJob(db, utilityType) {
-  const now = new Date().toISOString();
+  const now = nowIso();
   db.prepare(`
     UPDATE sync_jobs
     SET last_run_at = ?, last_status = ?, status_hint = ?, updated_at = ?
     WHERE utility_type = ?
-  `).run(now, "success", "已手动触发并模拟成功", now, utilityType);
+  `).run(now, "manual", "尚未接入自动采集器，请先手工录入或实现对应 provider connector", now, utilityType);
   db.prepare(`
     INSERT INTO system_logs (level, module_name, message, details, created_at)
     VALUES (?, ?, ?, ?, ?)
-  `).run("info", `${utilityType}-collector`, "收到手动触发任务请求", toJson({ source: "admin-action" }), now);
+  `).run("warning", `${utilityType}-collector`, "收到手动触发任务请求，但当前尚未接入真实自动采集器", toJson({ source: "admin-action" }), now);
   return db.prepare("SELECT * FROM sync_jobs WHERE utility_type = ?").get(utilityType);
+}
+
+export function createBillRecord(db, payload) {
+  const account = getAccountById(db, payload.accountId);
+  if (!account) {
+    return null;
+  }
+
+  const createdAt = nowIso();
+  const recordType = payload.recordType || "bill";
+  const status = payload.status || "confirmed";
+  const sourceChannel = payload.sourceChannel || "manual";
+  const result = db.prepare(`
+    INSERT INTO bill_records (
+      account_id, utility_type, statement_date, period_start, period_end, usage_value,
+      usage_unit, amount, currency, source_channel, record_type, is_estimated, status, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    payload.accountId,
+    account.utilityType,
+    payload.statementDate,
+    payload.periodStart || null,
+    payload.periodEnd || null,
+    payload.usageValue ?? null,
+    payload.usageUnit || null,
+    payload.amount,
+    payload.currency || "CNY",
+    sourceChannel,
+    recordType,
+    payload.isEstimated ? 1 : 0,
+    status,
+    createdAt
+  );
+
+  db.prepare(`
+    INSERT INTO system_logs (level, module_name, message, details, created_at)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(
+    "info",
+    `${account.utilityType}-manual-import`,
+    "管理员手工录入了一条账单记录",
+    toJson({
+      accountId: payload.accountId,
+      statementDate: payload.statementDate,
+      amount: payload.amount,
+      sourceChannel
+    }),
+    createdAt
+  );
+
+  return db.prepare(`
+    SELECT b.*, a.name AS account_name, a.provider
+    FROM bill_records b
+    JOIN accounts a ON a.id = b.account_id
+    WHERE b.id = ?
+    LIMIT 1
+  `).get(result.lastInsertRowid);
+}
+
+export function upsertCollectedBillRecord(db, payload) {
+  const account = getAccountById(db, payload.accountId);
+  if (!account) {
+    return null;
+  }
+
+  const statementDate = String(payload.statementDate || "").trim();
+  if (!statementDate) {
+    throw new Error("statementDate is required for collected bills");
+  }
+
+  const amount = Number(payload.amount);
+  if (!Number.isFinite(amount)) {
+    throw new Error("amount must be a finite number for collected bills");
+  }
+
+  const recordType = payload.recordType || "bill";
+  const sourceChannel = payload.sourceChannel || account.provider || "collector";
+  const existing = db.prepare(`
+    SELECT b.*, a.name AS account_name, a.provider
+    FROM bill_records b
+    JOIN accounts a ON a.id = b.account_id
+    WHERE b.account_id = ?
+      AND b.statement_date = ?
+      AND IFNULL(b.period_start, '') = IFNULL(?, '')
+      AND IFNULL(b.period_end, '') = IFNULL(?, '')
+      AND IFNULL(b.usage_unit, '') = IFNULL(?, '')
+      AND IFNULL(b.record_type, '') = IFNULL(?, '')
+      AND IFNULL(b.source_channel, '') = IFNULL(?, '')
+      AND ABS(IFNULL(b.amount, 0) - ?) < 0.000001
+    ORDER BY b.id DESC
+    LIMIT 1
+  `).get(
+    payload.accountId,
+    statementDate,
+    payload.periodStart || null,
+    payload.periodEnd || null,
+    payload.usageUnit || null,
+    recordType,
+    sourceChannel,
+    amount
+  );
+
+  if (existing) {
+    return {
+      inserted: false,
+      item: existing
+    };
+  }
+
+  const item = createBillRecord(db, {
+    accountId: payload.accountId,
+    statementDate,
+    periodStart: payload.periodStart || null,
+    periodEnd: payload.periodEnd || null,
+    usageValue: payload.usageValue ?? null,
+    usageUnit: payload.usageUnit || null,
+    amount,
+    currency: payload.currency || "CNY",
+    sourceChannel,
+    recordType,
+    status: payload.status || "confirmed",
+    isEstimated: Boolean(payload.isEstimated)
+  });
+
+  return {
+    inserted: true,
+    item
+  };
 }

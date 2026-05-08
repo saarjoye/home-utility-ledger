@@ -503,6 +503,119 @@ input {
   gap: 12px;
 }
 
+.section-actions,
+.form-actions,
+.form-status-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.account-admin-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(340px, 0.95fr);
+  gap: 18px;
+}
+
+.panel-form {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-light);
+  background: rgba(12, 18, 25, 0.55);
+}
+
+.form-intro strong {
+  display: block;
+  font-size: 16px;
+}
+
+.form-intro p {
+  margin: 6px 0 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.form-field {
+  display: grid;
+  gap: 6px;
+}
+
+.credential-field-wide {
+  grid-column: 1 / -1;
+}
+
+.form-field span,
+.checkbox-field span {
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.form-field input,
+.form-field select,
+.form-field textarea {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  color: var(--text-primary);
+}
+
+.form-field textarea {
+  min-height: 92px;
+  padding: 10px 12px;
+  resize: vertical;
+}
+
+.form-field input:focus,
+.form-field select:focus,
+.form-field textarea:focus {
+  outline: 1px solid var(--blue);
+  border-color: var(--blue);
+}
+
+.checkbox-field {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.inline-checkbox {
+  margin-left: auto;
+}
+
+.credential-chip,
+.form-feedback {
+  min-height: 36px;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-light);
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.form-feedback.is-success {
+  border-color: rgba(54, 211, 153, 0.35);
+  color: var(--green);
+}
+
+.form-feedback.is-error {
+  border-color: rgba(248, 113, 113, 0.35);
+  color: var(--red);
+}
+
 .setting-card {
   padding: 14px 16px;
   border-radius: var(--radius);
@@ -609,6 +722,7 @@ input {
   }
 
   .section-grid,
+  .account-admin-grid,
   .hero-panel {
     grid-template-columns: 1fr;
   }
@@ -640,6 +754,10 @@ input {
 
   .metric-grid,
   .settings-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .form-grid {
     grid-template-columns: 1fr;
   }
 

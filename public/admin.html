@@ -18,17 +18,18 @@
       </div>
 
       <div class="nav-group">
-        <div class="nav-label">总览</div>
+        <div class="nav-label">导航</div>
         <a class="nav-item active" href="#overview">后台仪表盘</a>
-        <a class="nav-item" href="#accounts">账户配置</a>
+        <a class="nav-item" href="#accounts">账号配置</a>
         <a class="nav-item" href="#jobs">采集任务</a>
+        <a class="nav-item" href="#bill-entry">手工账单</a>
         <a class="nav-item" href="#health">系统健康</a>
         <a class="nav-item" href="#settings">推送与规则</a>
         <a class="nav-item" href="#logs">运行日志</a>
       </div>
 
       <div class="sidebar-footer">
-        <a class="nav-item" href="/dashboard">前往前台</a>
+        <a class="nav-item" href="/dashboard">进入前台</a>
         <a class="nav-item" href="/logout">退出登录</a>
       </div>
     </aside>
@@ -37,12 +38,12 @@
       <header class="page-header" id="overview">
         <div>
           <p class="eyebrow">管理后台</p>
-          <h1>采集、账单与企业微信配置总控台</h1>
-          <p class="page-description">界面风格参考 Lucky Bridge，但已改为更适合家庭水电燃账本的会话登录和后台数据视图。</p>
+          <h1>采集、账单与企业微信推送总控台</h1>
+          <p class="page-description">用于维护水、电、燃账号，测试采集连接，触发同步任务，并查看系统运行情况。</p>
         </div>
         <div class="header-actions">
-          <span class="info-chip" id="currentUserChip">当前用户: 读取中</span>
-          <span class="info-chip" id="runtimeChip">运行环境: 读取中</span>
+          <span class="info-chip" id="currentUserChip">当前用户：读取中</span>
+          <span class="info-chip" id="runtimeChip">运行环境：读取中</span>
           <button class="btn btn-secondary" id="refreshPageButton" type="button">刷新数据</button>
           <button class="btn btn-primary" id="logoutButton" type="button">退出登录</button>
         </div>
@@ -50,20 +51,20 @@
 
       <section class="hero-panel">
         <div>
-          <p class="eyebrow">状态概览</p>
-          <h2 id="heroTitle">正在载入后台摘要</h2>
-          <p id="heroDescription">页面会聚合账户、任务、健康与消息推送配置。</p>
+          <p class="eyebrow">状态总览</p>
+          <h2 id="heroTitle">正在加载后台概览</h2>
+          <p id="heroDescription">页面会汇总账号、任务、健康状态与消息配置。</p>
         </div>
         <div class="hero-side">
           <div class="hero-card">
             <span class="hero-label">待处理事项</span>
             <strong id="pendingCountValue">--</strong>
-            <p id="pendingCountHint">正在统计待关注项</p>
+            <p id="pendingCountHint">正在统计待关注项目</p>
           </div>
           <div class="hero-card">
-            <span class="hero-label">最近检查</span>
+            <span class="hero-label">健康评分</span>
             <strong id="healthScoreValue">--</strong>
-            <p id="healthScoreHint">正在载入健康度</p>
+            <p id="healthScoreHint">正在加载运行状态</p>
           </div>
         </div>
       </section>
@@ -88,33 +89,212 @@
 
       <section class="panel-card" id="accounts">
         <div class="section-head">
-          <h3>账户配置</h3>
-          <p>可直接启停某个采集账户，便于临时隔离异常账号。</p>
+          <div>
+            <h3>账号配置</h3>
+            <p>在这里配置水、电、燃的真实采集账号与会话信息，所有凭据仅加密保存在数据库。</p>
+          </div>
+          <div class="section-actions">
+            <button class="btn btn-primary" id="createAccountButton" type="button">新增账号</button>
+            <button class="btn btn-secondary" id="resetAccountFormButton" type="button">清空表单</button>
+          </div>
         </div>
-        <div class="stack-list" id="accountList"></div>
+
+        <div class="account-admin-grid">
+          <div class="stack-list" id="accountList"></div>
+
+          <form class="panel-form" id="accountForm">
+            <input id="accountIdInput" name="accountId" type="hidden">
+
+            <div class="form-intro">
+              <strong id="accountFormTitle">新增账号</strong>
+              <p id="accountFormHint">保存后凭据会加密写入数据库，不再依赖环境变量。</p>
+            </div>
+
+            <div class="form-grid">
+              <label class="form-field">
+                <span>账号名称</span>
+                <input id="accountNameInput" name="name" type="text" placeholder="例如：家里主电表" required>
+              </label>
+
+              <label class="form-field">
+                <span>能源类型</span>
+                <select id="utilityTypeInput" name="utilityType" required>
+                  <option value="electricity">电</option>
+                  <option value="water">水</option>
+                  <option value="gas">燃气</option>
+                </select>
+              </label>
+
+              <label class="form-field">
+                <span>服务商</span>
+                <select id="providerInput" name="provider" required></select>
+              </label>
+
+              <label class="form-field">
+                <span>登录方式</span>
+                <select id="loginMethodInput" name="loginMethod" required></select>
+              </label>
+
+              <label class="form-field">
+                <span>账户号</span>
+                <input id="accountNoInput" name="accountNo" type="text" placeholder="客户号 / 户号 / 账单号" required>
+              </label>
+
+              <label class="form-field">
+                <span>登录名</span>
+                <input id="loginNameInput" name="loginName" type="text" placeholder="账号、手机号、公众号标识等">
+              </label>
+            </div>
+
+            <div class="form-intro">
+              <strong>采集凭据</strong>
+              <p>字段会随水、电、燃以及服务商自动切换，适合直接在后台维护 `cookieHeader`、`sessionToken`、`storageJson` 等采集信息。</p>
+            </div>
+
+            <div class="form-grid" id="credentialFieldsGrid"></div>
+
+            <label class="form-field">
+              <span>备注</span>
+              <textarea id="accountNotesInput" name="notes" rows="3" placeholder="记录登录说明、验证码方式、特殊备注"></textarea>
+            </label>
+
+            <label class="checkbox-field">
+              <input id="isPrimaryInput" name="isPrimary" type="checkbox">
+              <span>设为主账号</span>
+            </label>
+
+            <div class="form-status-row">
+              <div class="credential-chip" id="credentialStateChip">凭据状态：未配置</div>
+              <label class="checkbox-field inline-checkbox">
+                <input id="clearCredentialsInput" name="clearCredentials" type="checkbox">
+                <span>清空已保存凭据</span>
+              </label>
+            </div>
+
+            <div class="form-actions">
+              <button class="btn btn-primary" id="saveAccountButton" type="submit">保存账号</button>
+              <button class="btn btn-secondary" id="testAccountButton" type="button">测试连接</button>
+              <button class="btn btn-secondary" id="cancelEditAccountButton" type="button">取消编辑</button>
+            </div>
+
+            <div class="form-feedback" id="accountFormFeedback"></div>
+          </form>
+        </div>
       </section>
 
       <section class="panel-card" id="jobs">
         <div class="section-head">
-          <h3>采集任务</h3>
-          <p>支持手动触发电、水、燃任务，验证当前采集链路是否可用。</p>
+          <div>
+            <h3>采集任务</h3>
+            <p>这里展示真实的采集任务状态，可直接手动触发同步。</p>
+          </div>
         </div>
         <div class="stack-list" id="jobList"></div>
+      </section>
+
+      <section class="panel-card" id="bill-entry">
+        <div class="section-head">
+          <div>
+            <h3>手工账单入库</h3>
+            <p>当某个渠道临时无法自动采集时，可以先从这里录入账单，统计与推送仍然可用。</p>
+          </div>
+        </div>
+
+        <form class="panel-form" id="billForm">
+          <div class="form-grid">
+            <label class="form-field">
+              <span>所属账号</span>
+              <select id="billAccountIdInput" name="accountId" required></select>
+            </label>
+
+            <label class="form-field">
+              <span>账单日期</span>
+              <input id="statementDateInput" name="statementDate" type="date" required>
+            </label>
+
+            <label class="form-field">
+              <span>周期开始</span>
+              <input id="periodStartInput" name="periodStart" type="date">
+            </label>
+
+            <label class="form-field">
+              <span>周期结束</span>
+              <input id="periodEndInput" name="periodEnd" type="date">
+            </label>
+
+            <label class="form-field">
+              <span>用量</span>
+              <input id="usageValueInput" name="usageValue" type="number" step="0.01" placeholder="例如 12.8">
+            </label>
+
+            <label class="form-field">
+              <span>单位</span>
+              <input id="usageUnitInput" name="usageUnit" type="text" placeholder="kWh / m3">
+            </label>
+
+            <label class="form-field">
+              <span>金额</span>
+              <input id="amountInput" name="amount" type="number" step="0.01" placeholder="例如 34.20" required>
+            </label>
+
+            <label class="form-field">
+              <span>币种</span>
+              <input id="currencyInput" name="currency" type="text" value="CNY">
+            </label>
+
+            <label class="form-field">
+              <span>来源标记</span>
+              <input id="sourceChannelInput" name="sourceChannel" type="text" value="manual">
+            </label>
+
+            <label class="form-field">
+              <span>记录类型</span>
+              <select id="recordTypeInput" name="recordType">
+                <option value="bill">bill</option>
+                <option value="statement">statement</option>
+              </select>
+            </label>
+
+            <label class="form-field">
+              <span>状态</span>
+              <select id="billStatusInput" name="status">
+                <option value="confirmed">confirmed</option>
+                <option value="pending">pending</option>
+              </select>
+            </label>
+
+            <label class="checkbox-field">
+              <input id="isEstimatedBillInput" name="isEstimated" type="checkbox">
+              <span>估算数据</span>
+            </label>
+          </div>
+
+          <div class="form-actions">
+            <button class="btn btn-primary" id="submitBillButton" type="submit">录入账单</button>
+            <button class="btn btn-secondary" id="resetBillFormButton" type="button">清空账单表单</button>
+          </div>
+
+          <div class="form-feedback" id="billFormFeedback"></div>
+        </form>
       </section>
 
       <div class="section-grid">
         <section class="panel-card" id="settings">
           <div class="section-head">
-            <h3>推送与统计配置</h3>
-            <p>当前先做只读展示，后续可继续接入保存接口。</p>
+            <div>
+              <h3>推送与统计配置</h3>
+              <p>当前先展示现有配置，后续可以继续接入保存接口。</p>
+            </div>
           </div>
           <div class="settings-grid" id="settingsGrid"></div>
         </section>
 
         <section class="panel-card" id="logs">
           <div class="section-head">
-            <h3>最近日志</h3>
-            <p>保留最近的后台运行记录，方便排查采集失败。</p>
+            <div>
+              <h3>最近日志</h3>
+              <p>保留最近的后台运行记录，便于排查采集失败或配置问题。</p>
+            </div>
           </div>
           <div class="table-shell">
             <table class="data-table">

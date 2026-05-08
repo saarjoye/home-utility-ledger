@@ -1,155 +1,166 @@
 # Home Utility Ledger
 
-å®¶åº­çµãæ°´ãçè´¦åééä¸ç»è®¡åå°ç Docker å MVPã
+家庭水、电、燃账单采集与统计后台。
 
-å½åä»åºå·²ç»åå«ï¼
+当前版本重点：
+- 后台登录与 Session 鉴权
+- 后台页面配置水、电、燃账号
+- 水务与燃气真实采集器
+- 国网浙江浏览器会话采集器
+- 直接使用 GHCR 镜像部署
 
-- Web ç®¡çåç»å½
-- Session é´æ
-- åè Lucky Bridge é£æ ¼çåå° UI
-- GitHub Actions èªå¨æå»ºå¹¶åå¸ GHCR éå
-- å¯ç´æ¥å¨æå¡å¨æ Portainer ä¸­ä½¿ç¨ç `image:` é¨ç½²ç `docker-compose.yml`
+## 部署方式
 
-## ç´æ¥é¨ç½²
-
-ä¸»é¨ç½²æä»¶å°±æ¯ä»åºæ ¹ç®å½ç `docker-compose.yml`ï¼å®ä¸ä¼å¨æå¡å¨æå»ºï¼èæ¯ç´æ¥æåéåï¼
+默认部署文件是仓库根目录的 `docker-compose.yml`，它直接拉取镜像，不要求你在服务器本地构建：
 
 ```yaml
 image: ghcr.io/saarjoye/home-utility-ledger:main
 ```
 
-å¯å¨å½ä»¤ï¼
+启动：
 
 ```bash
 docker compose up -d
 ```
 
-å¦ææ¯ Portainerï¼ç´æ¥ä½¿ç¨ä»åºéç `docker-compose.yml` å³å¯ï¼ä¸åéè¦æ¬å° `Dockerfile` æå»ºã
+如果你要在本地自己构建镜像，使用：
 
-## è®¿é®å°å
-
-- åå°ï¼`http://localhost:3000/`
-- åå°ï¼`http://localhost:3000/admin`
-- ç»å½é¡µï¼`http://localhost:3000/login`
-- å¥åº·æ£æ¥ï¼`http://localhost:3000/api/health`
-
-## æä¹åç®å½
-
-å½åé¨ç½²æä»¶å·²ç»æä½ çæå¡å¨ç®å½åºå®ä¸ºï¼
-
-```yaml
-/home/docker/home-utility-ledger/data:/app/data
+```bash
+docker compose -f docker-compose.build.yml up -d --build
 ```
 
-å®¹å¨å SQLite è·¯å¾ï¼
+## 访问地址
+
+- 前台：`http://localhost:3000/`
+- 后台：`http://localhost:3000/admin`
+- 登录页：`http://localhost:3000/login`
+- 健康检查：`http://localhost:3000/api/health`
+
+## 持久化目录
+
+容器内数据库默认路径：
 
 ```text
 /app/data/app.db
 ```
 
-## æè½½æéè¯´æ
+当前 `docker-compose.yml` 已按你的服务器目录配置为：
 
-éåç°å¨ä¼å¨å®¹å¨å¯å¨æ¶èªå¨æ£æ¥å¹¶ä¿®æ­£ `/app/data` çæéï¼
+```yaml
+/home/docker/home-utility-ledger/data:/app/data
+```
 
-- å¥å£èæ¬ä¼åç¡®ä¿ `/app/data` å­å¨
-- å¦æå®¹å¨ä»¥ root å¯å¨ï¼ä¼èªå¨æ `/app/data` å½å±ä¿®æ­£ä¸º `node`
-- ä¿®æ­£å®æåï¼åéæä¸º `node` ç¨æ·è¿è¡åºç¨
+## 账号配置原则
 
-è¿æå³çæ­£å¸¸æåµä¸ä¸åéè¦ä½ æå¨ï¼
+水、电、燃的采集账号凭据不再通过环境变量配置。
 
-- `chmod 777 /home/docker/home-utility-ledger/data`
-- æå¨ compose éé¢å¤å `user: "0:0"`
+请在后台页面中配置：
+- 账号名
+- 服务商
+- 登录方式
+- 账户号
+- `cookieHeader`
+- `sessionToken`
+- `storageJson`
+- `orgId`
+- 其他服务商特定字段
 
-å¦æå®¿ä¸»æºæ¬èº«åäºæ´ä¸¥æ ¼ç ACL æ SELinux éå¶ï¼æéè¦é¢å¤å¤çå®¿ä¸»æºæéç­ç¥ã
+这些内容会加密存入数据库。
 
-## ç»å½éç½®
+## 系统级环境变量
 
-è¯·è³å°ä¿®æ¹è¿äºç¯å¢åéï¼
+这些变量仍然保留，用于系统运行而不是用户账号配置：
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `ADMIN_USERNAME` | `admin` | åå°ç®¡çåè´¦å· |
-| `ADMIN_PASSWORD` | `change-me-admin` | åå°ç®¡çåå¯ç  |
-| `SESSION_SECRET` | `change-me-session-secret` | Session ç­¾åå¯é¥ |
-| `SESSION_TTL_HOURS` | `168` | ç»å½ææææ¶é¿ï¼åä½å°æ¶ |
-| `COOKIE_SECURE` | `false` | å¦æåé¢æ HTTPS åä»£ï¼å»ºè®®æ¹ä¸º `true` |
+| `ADMIN_USERNAME` | `admin` | 后台管理员账号 |
+| `ADMIN_PASSWORD` | `change-me-admin` | 后台管理员密码 |
+| `SESSION_SECRET` | `change-me-session-secret` | Session 签名密钥 |
+| `SESSION_TTL_HOURS` | `168` | 登录态有效时长，单位小时 |
+| `COOKIE_SECURE` | `false` | 反代为 HTTPS 时建议改为 `true` |
+| `ACCOUNT_CREDENTIALS_SECRET` | `change-me-account-credentials-secret` | 账号凭据加密密钥 |
+| `AUTO_COLLECT_ENABLED` | `true` | 是否启用自动采集调度 |
+| `COLLECTOR_TICK_MS` | `60000` | 调度轮询间隔 |
+| `PLAYWRIGHT_HEADLESS` | `true` | Playwright 是否无头运行 |
+| `PLAYWRIGHT_BROWSERS_PATH` | `/ms-playwright` | 容器内共享浏览器路径 |
 
-å®æ´ç¤ºä¾è§ `.env.example`ã
+## Docker 与 Playwright
 
-## éååå¸
+国网浙江采集器依赖 Playwright 浏览器运行时。
 
-ä»åºå·²æ·»å  GitHub Actions å·¥ä½æµï¼
+这个浏览器不是要求你装在宿主机上，而是已经在镜像构建阶段装进容器：
+
+- `Dockerfile` 会执行 `npx playwright install --with-deps chromium`
+- 浏览器安装在共享路径 `/ms-playwright`
+- 运行时即使容器降权到 `node` 用户，也能继续访问该浏览器
+
+这意味着：
+- 宿主机不需要安装 Playwright
+- 服务器只需要能运行 Docker
+- 真正的浏览器依赖随镜像一起发布
+
+## 当前采集能力
+
+### 杭水网上营业厅
+
+支持后台配置：
+- `sessionToken`
+- `cookieHeader`
+- `meterNumber`
+
+### 杭州天然气服务号
+
+支持后台配置：
+- `cookieHeader`
+- `address`
+- `orgId`
+
+### 网上国网（浙江）
+
+支持两类方式：
+- 会话导入：`cookieHeader + storageJson`
+- 账号密码登录：后台配置登录页 URL 和选择器
+
+优先推荐会话导入方式。
+
+## 运行时权限
+
+镜像启动时会自动：
+- 确保 `/app/data` 存在
+- 修正 `/app/data` 归属
+- 再切换到 `node` 用户运行应用
+
+通常不需要你手工：
+- `chmod 777`
+- 在 compose 里写 `user: "0:0"`
+
+## 发布镜像
+
+仓库包含 GitHub Actions：
 
 - `.github/workflows/docker-publish.yml`
 
-è§¦åæ¡ä»¶ï¼
-
-- push å° `main`
-- æå¨ `workflow_dispatch`
-
-åå¸ç®æ ï¼
+推送到 `main` 后可自动发布到：
 
 - `ghcr.io/saarjoye/home-utility-ledger:main`
 - `ghcr.io/saarjoye/home-utility-ledger:latest`
-- `ghcr.io/saarjoye/home-utility-ledger:sha-...`
 
-## GHCR å¯è§æ§è¯´æ
+如果 GHCR 首次发布后仍是私有包，需要到 GitHub Packages 页面把它改成 `Public`。
 
-GitHub Container Registry å¨é¦æ¬¡åå¸åï¼éååæå¯è½ä»ç¶æ¯ç§æçã
+## 项目结构
 
-å¦ææå¡å¨æåéåæ¶æ¥æééè¯¯ï¼éè¦å° GitHub åé¡µé¢æåæ¹æ `Public`ã
+- `src/server.mjs`：HTTP 服务、登录鉴权、静态路由
+- `src/db.mjs`：SQLite、迁移、Session、账号凭据加密
+- `src/job-runner.mjs`：自动采集调度与连接测试
+- `src/connectors/`：水、电、燃采集器
+- `public/login.*`：登录页
+- `public/admin.*`：后台页
+- `docker-compose.yml`：直接拉 GHCR 镜像部署
+- `docker-compose.build.yml`：本地构建部署
+- `docker-entrypoint.sh`：启动时修正数据目录权限
 
-åå¥å£éå¸¸æ¯ï¼
+## 已知边界
 
-```text
-https://github.com/saarjoye?tab=packages
-```
-
-## æ¬å°æå»ºç
-
-å¦æåç»­ä½ è¿æ³å¨æ¬å°æå¨æå»ºä»åºï¼ä¹ä¿çäºä¸ä»½åç¬æä»¶ï¼
-
-- `docker-compose.build.yml`
-
-å®ä½¿ç¨ï¼
-
-```yaml
-build:
-  context: .
-  dockerfile: Dockerfile
-```
-
-## å½åç»å½å®ç°
-
-- ç»å½é¡µï¼`/login`
-- ç»å½æ¥å£ï¼`POST /api/auth/login`
-- ç»åºæ¥å£ï¼`POST /api/auth/logout`
-- å½åç¨æ·æ¥å£ï¼`GET /api/auth/me`
-- åä¿æ¤é¡µé¢ï¼`/admin`
-- åä¿æ¤æ¥å£ï¼`/api/admin/*`
-
-ææ¯æ¹æ¡ï¼
-
-- åç®¡çåè´¦å·ï¼æ¥èªç¯å¢åé
-- SQLite æä¹å Session
-- `HttpOnly` Cookie
-- æªç»å½è®¿é®åå°æ¶èªå¨éå®åå° `/login`
-
-## é¡¹ç®ç»æ
-
-- `src/server.mjs`ï¼HTTP æå¡ãç»å½é´æãéæè·¯ç±
-- `src/db.mjs`ï¼SQLite æ°æ®ãè¿ç§»ãSession å­å¨ãåå°æè¦
-- `public/login.html`ï¼ç»å½é¡µ
-- `public/login.js`ï¼ç»å½é»è¾
-- `public/admin.html`ï¼åå°é¡µ
-- `public/admin.css`ï¼åå°ä¸ç»å½æ ·å¼
-- `public/admin.js`ï¼åå°äº¤äº
-- `docker-compose.yml`ï¼ç´æ¥æ GHCR éåçé¨ç½²ç
-- `docker-compose.build.yml`ï¼æ¬å°æå»ºç
-- `docker-entrypoint.sh`ï¼å¯å¨æ¶ä¿®å¤ `/app/data` æéå¹¶éæè¿è¡
-
-## å·²ç¥è¾¹ç
-
-- å½åæ¯åç®¡çåç»å½ï¼ä¸æ¯æå¤ç¨æ·å RBAC
-- åå° `/dashboard` ä»æ¯ MVP ç¶æ
-- ç´æ¥é¨ç½²ä¾èµ GHCR éåå·²æååå¸ï¼ä¸åå¯è§æ§ä¸º `Public`
+- 当前仍是单管理员模型，不支持多用户和 RBAC
+- 前台 `/dashboard` 仍属于 MVP
+- 国网若不用会话导入，则仍需后台配置登录选择器

@@ -3,11 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "家庭电水燃账单中心 MVP，基于 Node.js 24 原生模块实现。",
+  "description": "Home utility ledger MVP with admin-managed water, electricity, and gas collectors.",
   "scripts": {
     "dev": "node --watch src/server.mjs",
     "start": "node src/server.mjs",
     "seed": "node src/server.mjs --seed-only"
+  },
+  "dependencies": {
+    "playwright": "^1.55.0"
   },
   "engines": {
     "node": ">=24"

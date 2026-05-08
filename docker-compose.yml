@@ -14,6 +14,11 @@ services:
       SESSION_SECRET: ${SESSION_SECRET:-change-me-session-secret}
       SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-168}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      ACCOUNT_CREDENTIALS_SECRET: ${ACCOUNT_CREDENTIALS_SECRET:-change-me-account-credentials-secret}
+      AUTO_COLLECT_ENABLED: ${AUTO_COLLECT_ENABLED:-true}
+      COLLECTOR_TICK_MS: ${COLLECTOR_TICK_MS:-60000}
+      PLAYWRIGHT_HEADLESS: ${PLAYWRIGHT_HEADLESS:-true}
+      PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
     ports:
       - "${PORT:-3000}:${PORT:-3000}"
     volumes:

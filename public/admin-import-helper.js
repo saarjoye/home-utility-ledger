@@ -142,10 +142,9 @@ export function getImportPreset(providerDef) {
   if (typeof copy === "function") {
     copy(text);
     console.log("已复制国网会话 JSON，直接回后台粘贴即可。");
-  } else {
-    console.log(text);
   }
-  return text;
+  console.log(text);
+  return undefined;
 })()`
     };
   }
@@ -191,10 +190,9 @@ export function getImportPreset(providerDef) {
   if (typeof copy === "function") {
     copy(text);
     console.log("已复制杭水会话 JSON，直接回后台粘贴即可。");
-  } else {
-    console.log(text);
   }
-  return text;
+  console.log(text);
+  return undefined;
 })()`
     };
   }

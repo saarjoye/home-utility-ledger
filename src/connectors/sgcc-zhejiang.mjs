@@ -421,6 +421,21 @@ function isRelayLoginRiskBlocked(error) {
   return /RK001|网络连接超时/.test(String(error || ""));
 }
 
+function isSgccPasswordModeUnavailableError(error) {
+  return /GB002|请求异常.?GB002|账号密码登录失败：请求异常/.test(String(error || ""));
+}
+
+function buildSgccPasswordModeUnavailableMessage(error) {
+  const message = String(error?.message || error || "").trim();
+  return [
+    "网上国网当前更稳定的方式是先在官网或 App 使用短信验证码登录，再导入后台里的 CK。",
+    "你这次填写的账号密码链路没有通过，官网当前很可能已经不再稳定支持纯账号密码直登。",
+    message ? `原始返回：${message}` : null
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
 async function getRelayKeyCode(relayBaseUrl, context) {
   return requestViaRelay(relayBaseUrl, {
     url: SGCC_API.getKeyCode,
@@ -1256,16 +1271,73 @@ function assertSgccSessionSnapshotForRuntime(credentials = {}) {
 }
 
 export async function testSgccZhejiangConnection({ account, credentials }) {
+  if (hasSessionSnapshot(credentials)) {
+    return testSgccSessionConnection({ account, credentials });
+  }
   if (hasRelayCredentials(credentials, account)) {
-    return testSgccRelayConnection({ account, credentials });
+    try {
+      return await testSgccRelayConnection({ account, credentials });
+    } catch (error) {
+      if (isSgccPasswordModeUnavailableError(error)) {
+        throw new Error(buildSgccPasswordModeUnavailableMessage(error));
+      }
+      throw error;
+    }
   }
   assertSgccSessionSnapshotForRuntime(credentials);
   return testSgccSessionConnection({ account, credentials });
 }
 
 export async function collectSgccZhejiangBills({ account, credentials }) {
+  if (hasSessionSnapshot(credentials)) {
+    const config = getPlaywrightConfig(credentials);
+    let extracted;
+    try {
+      extracted = await extractSgccSessionData(config, account, credentials);
+    } catch (error) {
+      if (!hasStorageSnapshot(credentials)) {
+        throw new Error("网上国网 CK 已导入，但当前还不足以直接进入账单页。请补充同一次登录会话对应的 storageJson 后再试一次。");
+      }
+      throw error;
+    }
+
+    const bills = mapSummaryBills(account, extracted.summaryAccount);
+    const recentDailyUsage = Array.isArray(extracted.charge?.data?.sevenEleList)
+      ? extracted.charge.data.sevenEleList.map((item) => ({
+          usageDate: normalizeDate(item.day),
+          usageValue: toNumber(item.dayElePq),
+          peakUsage: toNumber(item.thisPPq),
+          valleyUsage: toNumber(item.thisVPq),
+          tipUsage: toNumber(item.thisTPq),
+          normalUsage: toNumber(item.thisNPq),
+          costAmount: toNumber(item.thisAmt),
+          raw: item
+        }))
+      : [];
+
+    return {
+      ok: true,
+      summary: `SGCC Zhejiang collected ${bills.length} monthly bill items`,
+      details: {
+        provider: account.provider,
+        utilityType: account.utilityType,
+        accountNo: extracted.summaryAccount?.consNoDst || extracted.summaryAccount?.consNo_dst || account.accountNo,
+        recentDailyUsage,
+        annualSummary: extracted.charge?.data?.powerData?.dataInfo || null,
+        stage: "browser-session"
+      },
+      bills
+    };
+  }
   if (hasRelayCredentials(credentials, account)) {
-    return collectSgccRelayBills({ account, credentials });
+    try {
+      return await collectSgccRelayBills({ account, credentials });
+    } catch (error) {
+      if (isSgccPasswordModeUnavailableError(error)) {
+        throw new Error(buildSgccPasswordModeUnavailableMessage(error));
+      }
+      throw error;
+    }
   }
   assertSgccSessionSnapshotForRuntime(credentials);
 

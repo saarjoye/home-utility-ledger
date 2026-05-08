@@ -396,6 +396,45 @@ const providerDefinitionsClean = [
   }
 ];
 
+const sgccProviderDefinition = providerDefinitionsClean.find((item) => item.key === "sgcc_zhejiang");
+if (sgccProviderDefinition) {
+  sgccProviderDefinition.provider = "网上国网（浙江）";
+  sgccProviderDefinition.loginMethods = ["短信登录后的 CK 会话导入", "账号密码实验模式"];
+  sgccProviderDefinition.form = {
+    ...sgccProviderDefinition.form,
+    accountNoLabel: "用电户号（可留空）",
+    accountNoPlaceholder: "如果同一账号下绑定多个用电户号，建议填写；单户号可留空",
+    notesPlaceholder: "可记录住址、户名或抓取来源，非必填",
+    credentialIntro: "当前推荐使用短信验证码登录后的浏览器 CK 会话导入。账号密码方式仅保留为实验备用，不建议作为主流程。",
+    sessionGuide: "请先在本地浏览器登录 95598 / 网上国网，再把 CK 导入后台；若仅有 CK 仍进不了账单页，再补同一次会话的 storageJson。账号密码实验模式可能返回 GB002、风控或中转链路异常。"
+  };
+
+  const fieldMap = Object.fromEntries(
+    (sgccProviderDefinition.credentialFields || []).map((field) => [field.key, field])
+  );
+
+  if (fieldMap.username) {
+    fieldMap.username.label = "网上国网账号";
+    fieldMap.username.helpText = "实验备用字段。只有在你明确要测试账号密码链路时再填写；如果同时填写了 CK，系统会优先使用 CK。";
+  }
+  if (fieldMap.password) {
+    fieldMap.password.label = "网上国网密码";
+    fieldMap.password.helpText = "与网上国网账号配套使用。官网当前多数情况下会要求短信验证码，因此这条链路不保证可用。";
+  }
+  if (fieldMap.relayBaseUrl) {
+    fieldMap.relayBaseUrl.label = "中转服务地址（可留空）";
+    fieldMap.relayBaseUrl.helpText = "默认使用社区方案里的中转服务地址；只有你自建了兼容服务时才需要修改。";
+  }
+  if (fieldMap.cookieHeader) {
+    fieldMap.cookieHeader.label = "登录 Cookie（CK）";
+    fieldMap.cookieHeader.helpText = "推荐方式。从已短信登录成功的 95598 / 网上国网页面复制整段 Cookie。";
+  }
+  if (fieldMap.storageJson) {
+    fieldMap.storageJson.label = "浏览器存储快照（storageJson，可选增强）";
+    fieldMap.storageJson.helpText = "仅在使用 CK 会话导入，且 CK 单独无法进入账单页时，再补充 localStorage / sessionStorage 快照。";
+  }
+}
+
 function findProviderDefinition(utilityType, provider) {
   return providerDefinitionsClean.find((item) => {
     return item.utilityType === utilityType && item.provider === provider;

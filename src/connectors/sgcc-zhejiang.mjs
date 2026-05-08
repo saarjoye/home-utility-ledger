@@ -366,6 +366,14 @@ async function testSgccSessionConnection({ account, credentials }) {
   };
 }
 
+function assertSgccSessionSnapshot(credentials = {}) {
+  if (hasSessionSnapshot(credentials)) {
+    return;
+  }
+
+  throw new Error("网上国网目前只支持 CK 会话导入。请在后台填写登录 Cookie（CK）和 storageJson，不需要再填写登录页 URL、详情页 URL 或选择器。");
+}
+
 async function runLoginFlow({ account, credentials }) {
   const config = getPlaywrightConfig(credentials);
   if (!config.loginUrl || !config.usernameSelector || !config.passwordSelector || !config.submitSelector) {
@@ -401,24 +409,12 @@ async function runLoginFlow({ account, credentials }) {
 }
 
 export async function testSgccZhejiangConnection({ account, credentials }) {
-  if (hasSessionSnapshot(credentials)) {
-    return testSgccSessionConnection({ account, credentials });
-  }
-  return runLoginFlow({ account, credentials });
+  assertSgccSessionSnapshot(credentials);
+  return testSgccSessionConnection({ account, credentials });
 }
 
 export async function collectSgccZhejiangBills({ account, credentials }) {
-  if (!hasSessionSnapshot(credentials)) {
-    const result = await runLoginFlow({ account, credentials });
-    return {
-      ...result,
-      summary: `${result.summary}, but bill extraction still requires imported browser session`,
-      details: {
-        ...result.details,
-        stage: "login-only"
-      }
-    };
-  }
+  assertSgccSessionSnapshot(credentials);
 
   const config = getPlaywrightConfig(credentials);
   const extracted = await extractSgccSessionData(config, account, credentials);

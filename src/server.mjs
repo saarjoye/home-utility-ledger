@@ -239,6 +239,48 @@ const providerDefinitionsForApi = [
   }
 ];
 
+const providerDefinitionsForAdminUi = [
+  {
+    key: "sgcc_zhejiang",
+    utilityType: "electricity",
+    provider: "网上国网（浙江）",
+    loginMethods: [
+      "CK 会话导入"
+    ],
+    credentialFields: [
+      { key: "cookieHeader", label: "登录 Cookie（CK）", type: "password", required: true },
+      { key: "storageJson", label: "浏览器存储快照（storageJson）", type: "password", required: true }
+    ]
+  },
+  {
+    key: "hzwater_online",
+    utilityType: "water",
+    provider: "杭水网上营业厅",
+    loginMethods: [
+      "Token 导入",
+      "CK 导入"
+    ],
+    credentialFields: [
+      { key: "sessionToken", label: "waterUserToken", type: "password", required: false },
+      { key: "cookieHeader", label: "登录 Cookie（CK）", type: "password", required: false },
+      { key: "meterNumber", label: "水表号", type: "text", required: false }
+    ]
+  },
+  {
+    key: "hzgas_servicehall",
+    utilityType: "gas",
+    provider: "杭州天然气服务号",
+    loginMethods: [
+      "CK 导入"
+    ],
+    credentialFields: [
+      { key: "cookieHeader", label: "登录 Cookie（CK）", type: "password", required: true },
+      { key: "address", label: "开户地址", type: "text", required: false },
+      { key: "orgId", label: "机构 ID（orgId）", type: "text", required: false }
+    ]
+  }
+];
+
 function writeResponse(res, statusCode, headers = {}, body = "") {
   res.writeHead(statusCode, headers);
   res.end(body);
@@ -646,7 +688,7 @@ async function routeApi(req, res, url) {
     }
 
     if (req.method === "GET" && url.pathname === "/api/admin/providers") {
-      return sendJson(res, 200, { items: providerDefinitionsForApi }, { "Cache-Control": "no-store" });
+      return sendJson(res, 200, { items: providerDefinitionsForAdminUi }, { "Cache-Control": "no-store" });
     }
 
     if (req.method === "GET" && url.pathname === "/api/admin/accounts") {

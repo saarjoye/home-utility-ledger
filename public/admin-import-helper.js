@@ -8,7 +8,21 @@ function tryParseJsonText(raw) {
     return null;
   }
   try {
-    return JSON.parse(text);
+    const parsed = JSON.parse(text);
+    if (typeof parsed === "string") {
+      const nested = parsed.trim();
+      if (
+        (nested.startsWith("{") && nested.endsWith("}"))
+        || (nested.startsWith("[") && nested.endsWith("]"))
+      ) {
+        try {
+          return JSON.parse(nested);
+        } catch {
+          return parsed;
+        }
+      }
+    }
+    return parsed;
   } catch {
     return null;
   }
@@ -116,14 +130,22 @@ export function getImportPreset(providerDef) {
     }
     return result;
   };
-  return JSON.stringify({
+  const payload = {
     provider: "sgcc_zhejiang",
     cookieHeader: document.cookie,
     storageJson: {
       localStorage: dump(window.localStorage),
       sessionStorage: dump(window.sessionStorage)
     }
-  }, null, 2);
+  };
+  const text = JSON.stringify(payload, null, 2);
+  if (typeof copy === "function") {
+    copy(text);
+    console.log("已复制国网会话 JSON，直接回后台粘贴即可。");
+  } else {
+    console.log(text);
+  }
+  return text;
 })()`
     };
   }
@@ -160,11 +182,19 @@ export function getImportPreset(providerDef) {
     }
     return result;
   };
-  return JSON.stringify({
+  const payload = {
     provider: "hzwater_online",
     waterUserToken: (window.localStorage.getItem("waterUserToken") || "").replace(/^"+|"+$/g, ""),
     localStorage: dump(window.localStorage)
-  }, null, 2);
+  };
+  const text = JSON.stringify(payload, null, 2);
+  if (typeof copy === "function") {
+    copy(text);
+    console.log("已复制杭水会话 JSON，直接回后台粘贴即可。");
+  } else {
+    console.log(text);
+  }
+  return text;
 })()`
     };
   }

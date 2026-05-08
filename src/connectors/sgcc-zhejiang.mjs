@@ -94,13 +94,16 @@ function parseCookieHeader(cookieHeader, domain = "www.95598.cn") {
 }
 
 function hasSessionSnapshot(credentials = {}) {
-  return Boolean(trimText(credentials.cookieHeader || credentials.cookies)) &&
-    Boolean(
-      trimText(credentials.storageJson) ||
-      trimText(credentials.browserStorageJson) ||
-      trimText(credentials.localStorageJson) ||
-      trimText(credentials.sessionSnapshot)
-    );
+  return Boolean(trimText(credentials.cookieHeader || credentials.cookies));
+}
+
+function hasStorageSnapshot(credentials = {}) {
+  return Boolean(
+    trimText(credentials.storageJson) ||
+    trimText(credentials.browserStorageJson) ||
+    trimText(credentials.localStorageJson) ||
+    trimText(credentials.sessionSnapshot)
+  );
 }
 
 async function createBrowserContext(config) {
@@ -351,7 +354,15 @@ async function extractSgccSessionData(config, account, credentials) {
 
 async function testSgccSessionConnection({ account, credentials }) {
   const config = getPlaywrightConfig(credentials);
-  const extracted = await extractSgccSessionData(config, account, credentials);
+  let extracted;
+  try {
+    extracted = await extractSgccSessionData(config, account, credentials);
+  } catch (error) {
+    if (!hasStorageSnapshot(credentials)) {
+      throw new Error("已识别到你填写了国网 CK，但当前这份 CK 单独还不足以拿到账单页面数据。你可以重新抓取一次页面会话后，再补充 storageJson 增强导入。");
+    }
+    throw error;
+  }
   return {
     ok: true,
     summary: "SGCC Zhejiang session is valid",
@@ -366,7 +377,7 @@ async function testSgccSessionConnection({ account, credentials }) {
   };
 }
 
-function assertSgccSessionSnapshot(credentials = {}) {
+function assertSgccSessionSnapshotForRuntime(credentials = {}) {
   if (hasSessionSnapshot(credentials)) {
     return;
   }
@@ -408,16 +419,32 @@ async function runLoginFlow({ account, credentials }) {
   });
 }
 
+function assertSgccSessionSnapshot(credentials = {}) {
+  if (hasSessionSnapshot(credentials)) {
+    return;
+  }
+
+  throw new Error("网上国网目前使用 CK 会话导入。请先在后台填写登录 Cookie（CK）；storageJson 现在是可选增强项，不需要再填写登录页 URL、详情页 URL 或选择器。");
+}
+
 export async function testSgccZhejiangConnection({ account, credentials }) {
-  assertSgccSessionSnapshot(credentials);
+  assertSgccSessionSnapshotForRuntime(credentials);
   return testSgccSessionConnection({ account, credentials });
 }
 
 export async function collectSgccZhejiangBills({ account, credentials }) {
-  assertSgccSessionSnapshot(credentials);
+  assertSgccSessionSnapshotForRuntime(credentials);
 
   const config = getPlaywrightConfig(credentials);
-  const extracted = await extractSgccSessionData(config, account, credentials);
+  let extracted;
+  try {
+    extracted = await extractSgccSessionData(config, account, credentials);
+  } catch (error) {
+    if (!hasStorageSnapshot(credentials)) {
+      throw new Error("国网 CK 已导入，但当前无法直接从页面提取账单数据。请补充 storageJson 后再试一次。");
+    }
+    throw error;
+  }
   const bills = mapSummaryBills(account, extracted.summaryAccount);
   const recentDailyUsage = Array.isArray(extracted.charge?.data?.sevenEleList)
     ? extracted.charge.data.sevenEleList.map((item) => ({

@@ -688,7 +688,27 @@ async function routeApi(req, res, url) {
     }
 
     if (req.method === "GET" && url.pathname === "/api/admin/providers") {
-      return sendJson(res, 200, { items: providerDefinitionsForAdminUi }, { "Cache-Control": "no-store" });
+      const items = providerDefinitionsForAdminUi.map((item) => {
+        if (item.key !== "sgcc_zhejiang") {
+          return item;
+        }
+
+        return {
+          ...item,
+          credentialFields: item.credentialFields.map((field) => {
+            if (field.key !== "storageJson") {
+              return field;
+            }
+            return {
+              ...field,
+              label: "浏览器存储快照（storageJson，可选增强项）",
+              required: false
+            };
+          })
+        };
+      });
+
+      return sendJson(res, 200, { items }, { "Cache-Control": "no-store" });
     }
 
     if (req.method === "GET" && url.pathname === "/api/admin/accounts") {

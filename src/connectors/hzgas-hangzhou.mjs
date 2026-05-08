@@ -188,7 +188,7 @@ async function fetchBaseInfo(config, credentials, userNo, orgId = "") {
 async function resolveAccountContext(config, account, credentials) {
   const cookieHeader = resolveCookieHeader(credentials);
   if (!cookieHeader) {
-    throw new Error("Hangzhou Gas requires cookieHeader");
+    throw new Error("杭州燃气当前需要填写登录 Cookie（CK）");
   }
 
   let userNo = resolveUserNo(account, credentials);
@@ -202,7 +202,10 @@ async function resolveAccountContext(config, account, credentials) {
   }
 
   if (!userNo) {
-    throw new Error("Hangzhou Gas requires accountNo/userNo, or an address that can resolve a userNo");
+    if (address) {
+      throw new Error("已尝试用开户地址自动解析燃气户号，但当前这份 CK 没有返回 userNo。请直接填写燃气户号 / userNo。");
+    }
+    throw new Error("杭州燃气当前请填写燃气户号 / userNo。仅填 CK 还不够。");
   }
 
   const baseInfo = await fetchBaseInfo(config, credentials, userNo, orgId);

@@ -262,7 +262,7 @@ const providerDefinitionsForAdminUi = [
     ],
     credentialFields: [
       { key: "sessionToken", label: "waterUserToken", type: "password", required: false },
-      { key: "unid", label: "UNID", type: "text", required: true },
+      { key: "unid", label: "UNID（可留空）", type: "text", required: false },
       { key: "cookieHeader", label: "登录 Cookie（CK）", type: "password", required: false },
       { key: "meterNumber", label: "水表号", type: "text", required: false }
     ]
@@ -281,6 +281,103 @@ const providerDefinitionsForAdminUi = [
     ]
   }
 ];
+
+const providerDefinitionsClean = [
+  {
+    key: "sgcc_zhejiang",
+    utilityType: "electricity",
+    provider: "网上国网（浙江）",
+    loginMethods: ["浏览器会话导入"],
+    form: {
+      accountNoLabel: "用电户号（可留空）",
+      accountNoPlaceholder: "如果同一账号下绑定多个用电户号，建议填写；单户号可留空",
+      accountNoRequired: false,
+      loginNameVisible: false,
+      notesPlaceholder: "可记录住址、户名或抓取来源，非必填",
+      credentialIntro: "推荐方式：先在浏览器登录 95598 / 网上国网，再把会话导入到后台。",
+      sessionGuide: "短信验证码登录通常伴随滑块和风控校验，不适合在服务器 Docker 中做长期稳定的纯自动登录。"
+    },
+    credentialFields: [
+      {
+        key: "cookieHeader",
+        label: "登录 Cookie（CK）",
+        type: "password",
+        required: true,
+        helpText: "从已登录的 95598 / 网上国网页面复制整段 Cookie。"
+      },
+      {
+        key: "storageJson",
+        label: "浏览器存储快照（storageJson，可选增强）",
+        type: "password",
+        required: false,
+        helpText: "只有 CK 单独无法进入账单页时，再补充 localStorage / sessionStorage 快照。"
+      }
+    ]
+  },
+  {
+    key: "hzwater_online",
+    utilityType: "water",
+    provider: "杭州市水务集团网上营业厅",
+    loginMethods: ["Token 导入"],
+    form: {
+      accountNoLabel: "水表号 / 户号（可留空）",
+      accountNoPlaceholder: "通常可留空；测试成功后系统会自动识别水表号",
+      accountNoRequired: false,
+      loginNameVisible: false,
+      notesPlaceholder: "可记录开户地址、户名或补充说明，非必填",
+      credentialIntro: "当前最稳的接入方式是填写 waterUserToken；如已知道水表号，可一并填写以加快匹配。",
+      sessionGuide: "杭水网页虽然支持短信验证码登录，但真正采集依赖登录后的 waterUserToken。纯服务器容器无法直接读取你浏览器里的 localStorage，所以不适合做无人工参与的短信自动登录。"
+    },
+    credentialFields: [
+      {
+        key: "sessionToken",
+        label: "waterUserToken",
+        type: "password",
+        required: true,
+        helpText: "从已登录杭水网页的 localStorage 中提取 waterUserToken。"
+      },
+      {
+        key: "meterNumber",
+        label: "水表号（可留空）",
+        type: "text",
+        required: false,
+        helpText: "留空时会先请求当前账号的水表列表并自动选取。"
+      }
+    ]
+  },
+  {
+    key: "hzgas_servicehall",
+    utilityType: "gas",
+    provider: "杭州天然气公众号服务",
+    loginMethods: ["CK 会话导入"],
+    form: {
+      accountNoLabel: "燃气户号 / userNo",
+      accountNoPlaceholder: "例如 0099162500",
+      accountNoRequired: true,
+      loginNameVisible: false,
+      notesPlaceholder: "可记录开户地址或站点信息，非必填",
+      credentialIntro: "当前最稳的接入方式是填写公众号会话 CK + 燃气户号 / userNo。",
+      sessionGuide: "燃气查询页面依赖微信公众号环境，服务器容器无法直接完成公众号内登录。"
+    },
+    credentialFields: [
+      {
+        key: "cookieHeader",
+        label: "登录 Cookie（CK）",
+        type: "password",
+        required: true,
+        helpText: "从已登录的公众号 H5 请求里复制 `logged_in_user=...` 这一段会话 Cookie。"
+      }
+    ]
+  }
+];
+
+function findProviderDefinition(utilityType, provider) {
+  return providerDefinitionsClean.find((item) => {
+    return item.utilityType === utilityType && item.provider === provider;
+  }) || providerDefinitionsClean.find((item) => {
+    return item.utilityType === utilityType;
+  }) || null;
+}
 
 function writeResponse(res, statusCode, headers = {}, body = "") {
   res.writeHead(statusCode, headers);
@@ -342,7 +439,7 @@ function normalizeAccountPayload(body = {}) {
     name: normalizeText(body.name),
     utilityType: normalizeText(body.utilityType),
     provider: normalizeText(body.provider),
-    accountNo: normalizeText(body.accountNo),
+    accountNo: normalizeOptionalText(body.accountNo) || "",
     loginName: normalizeOptionalText(body.loginName),
     loginMethod: normalizeText(body.loginMethod),
     status,
@@ -355,10 +452,13 @@ function normalizeAccountPayload(body = {}) {
 
 function validateAccountPayload(payload) {
   const errors = [];
+  const providerDefinition = findProviderDefinition(payload.utilityType, payload.provider);
+  const accountNoRequired = providerDefinition?.form?.accountNoRequired ?? true;
+
   if (!payload.name) errors.push("name is required");
   if (!payload.utilityType) errors.push("utilityType is required");
   if (!payload.provider) errors.push("provider is required");
-  if (!payload.accountNo) errors.push("accountNo is required");
+  if (accountNoRequired && !payload.accountNo) errors.push("accountNo is required");
   if (!payload.loginMethod) errors.push("loginMethod is required");
   if (!["electricity", "water", "gas"].includes(payload.utilityType)) {
     errors.push("utilityType must be electricity, water, or gas");
@@ -689,6 +789,8 @@ async function routeApi(req, res, url) {
     }
 
     if (req.method === "GET" && url.pathname === "/api/admin/providers") {
+      return sendJson(res, 200, { items: providerDefinitionsClean }, { "Cache-Control": "no-store" });
+
       const items = providerDefinitionsForAdminUi.map((item) => {
         if (item.key !== "sgcc_zhejiang") {
           return item;

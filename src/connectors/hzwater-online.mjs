@@ -95,8 +95,8 @@ async function postWaterJson(config, credentials, requestPath, payload) {
   }
 
   if (data?.status !== 0 && data?.status !== "0" && !Array.isArray(data?.data)) {
-    if (/参数类型错误/.test(String(data?.message || ""))) {
-      throw new Error("杭水接口返回“参数类型错误”。通常是因为缺少或填写错误的 waterUserToken / UNID。请在后台补充正确的 waterUserToken、UNID，必要时再补 Cookie。");
+    if (/\u53c2\u6570\u7c7b\u578b\u9519\u8bef/.test(String(data?.message || ""))) {
+      throw new Error("杭水接口返回“参数类型错误”。根据最新抓包，UNID 可以留空。请优先检查 waterUserToken 是否有效；如果你已经知道水表号，也建议一并填写。");
     }
     throw new Error(data?.message || `Hangzhou Water request rejected at ${requestPath}`);
   }
@@ -224,7 +224,7 @@ function mapWaterBill(account, row) {
     currency: "CNY",
     sourceChannel: "wt.hzwgc.com",
     recordType: "bill",
-    status: /已|销账|缴费|支付/i.test(String(row?.payStatus ?? "")) ? "confirmed" : "pending",
+    status: /(?:\u5df2|\u9500\u8d26|\u7f34\u8d39|\u652f\u4ed8)/i.test(String(row?.payStatus ?? "")) ? "confirmed" : "pending",
     isEstimated: false,
     raw: row
   };
@@ -268,10 +268,7 @@ export async function testHzWaterConnection({ account, credentials }) {
   const unid = resolveWaterUnid(credentials);
 
   if (!token && !cookieHeader) {
-    throw new Error("Hangzhou Water requires sessionToken/waterUserToken or cookieHeader");
-  }
-  if (!unid) {
-    throw new Error("杭水测试还需要 UNID。请在后台账号里补充 UNID 后再测试。");
+    throw new Error("杭州水务当前请先填写 waterUserToken。只有在你明确抓到了可用会话 CK 时，才建议改填 cookieHeader。");
   }
 
   const { rows, meter } = await fetchMeters(config, account, credentials);
@@ -297,10 +294,6 @@ export async function testHzWaterConnection({ account, credentials }) {
 
 export async function collectHzWaterBills({ account, credentials }) {
   const config = getWaterConfig();
-  const unid = resolveWaterUnid(credentials);
-  if (!unid) {
-    throw new Error("杭水采集还需要 UNID。请在后台账号里补充 UNID 后再试一次。");
-  }
   const { rows, meter } = await fetchMeters(config, account, credentials);
   const meterNumber = getMeterNumber(meter, account, credentials);
   if (!meterNumber) {

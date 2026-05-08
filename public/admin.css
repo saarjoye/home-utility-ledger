@@ -538,6 +538,43 @@ input {
   font-size: 13px;
 }
 
+.provider-guide {
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  background: rgba(56, 189, 248, 0.07);
+}
+
+.provider-guide p + p {
+  margin-top: 8px;
+}
+
+.import-helper {
+  gap: 10px;
+}
+
+.import-helper textarea {
+  width: 100%;
+  min-height: 150px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  color: var(--text-primary);
+  resize: vertical;
+}
+
+.import-helper textarea:focus {
+  outline: 1px solid var(--blue);
+  border-color: var(--blue);
+}
+
+.import-helper-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -551,6 +588,13 @@ input {
 
 .credential-field-wide {
   grid-column: 1 / -1;
+}
+
+.field-help {
+  margin-top: 6px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .form-field span,

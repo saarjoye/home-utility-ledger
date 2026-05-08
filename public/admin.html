@@ -19,7 +19,7 @@
 
       <div class="nav-group">
         <div class="nav-label">导航</div>
-        <a class="nav-item active" href="#overview">后台仪表盘</a>
+        <a class="nav-item active" href="#overview">后台概览</a>
         <a class="nav-item" href="#accounts">账号配置</a>
         <a class="nav-item" href="#jobs">采集任务</a>
         <a class="nav-item" href="#bill-entry">手工账单</a>
@@ -39,7 +39,7 @@
         <div>
           <p class="eyebrow">管理后台</p>
           <h1>采集、账单与企业微信推送总控台</h1>
-          <p class="page-description">用于维护水、电、燃账号，测试采集连接，触发同步任务，并查看系统运行情况。</p>
+          <p class="page-description">用于维护水、电、燃账号，测试采集连接，触发同步任务，并查看系统运行状态。</p>
         </div>
         <div class="header-actions">
           <span class="info-chip" id="currentUserChip">当前用户：读取中</span>
@@ -91,7 +91,7 @@
         <div class="section-head">
           <div>
             <h3>账号配置</h3>
-            <p>在这里配置水、电、燃的真实采集账号与会话信息，所有凭据仅加密保存在数据库。</p>
+            <p>在这里配置真实可用的水、电、燃采集账号。敏感凭据只加密保存在数据库里，不再依赖环境变量。</p>
           </div>
           <div class="section-actions">
             <button class="btn btn-primary" id="createAccountButton" type="button">新增账号</button>
@@ -107,16 +107,16 @@
 
             <div class="form-intro">
               <strong id="accountFormTitle">新增账号</strong>
-              <p id="accountFormHint">保存后凭据会加密写入数据库，不再依赖环境变量。</p>
+              <p id="accountFormHint">保存后凭据会加密写入数据库。保存成功后不会回显敏感字段，这是正常的安全行为。</p>
             </div>
 
             <div class="form-grid">
-              <label class="form-field">
+              <label class="form-field" id="accountNameField">
                 <span>账号名称</span>
                 <input id="accountNameInput" name="name" type="text" placeholder="例如：家里主电表" required>
               </label>
 
-              <label class="form-field">
+              <label class="form-field" id="utilityTypeField">
                 <span>能源类型</span>
                 <select id="utilityTypeInput" name="utilityType" required>
                   <option value="electricity">电</option>
@@ -125,37 +125,56 @@
                 </select>
               </label>
 
-              <label class="form-field">
+              <label class="form-field" id="providerField">
                 <span>服务商</span>
                 <select id="providerInput" name="provider" required></select>
               </label>
 
-              <label class="form-field">
-                <span>登录方式</span>
+              <label class="form-field" id="loginMethodField">
+                <span>接入方式</span>
                 <select id="loginMethodInput" name="loginMethod" required></select>
               </label>
 
-              <label class="form-field">
-                <span>账户号</span>
-                <input id="accountNoInput" name="accountNo" type="text" placeholder="客户号 / 户号 / 账单号" required>
+              <label class="form-field" id="accountNoField">
+                <span>账户标识</span>
+                <input id="accountNoInput" name="accountNo" type="text" placeholder="客户号 / 户号 / 账单号">
               </label>
 
-              <label class="form-field">
+              <label class="form-field" id="loginNameField">
                 <span>登录名</span>
-                <input id="loginNameInput" name="loginName" type="text" placeholder="账号、手机号、公众号标识等">
+                <input id="loginNameInput" name="loginName" type="text" placeholder="如服务商需要，可填写账号或手机号">
               </label>
+            </div>
+
+            <div class="form-intro provider-guide">
+              <strong id="providerGuideTitle">接入说明</strong>
+              <p id="providerGuideText">请先选择服务商，系统会给出最小可用字段说明。</p>
+              <p id="providerGuideExtra"></p>
+            </div>
+
+            <div class="form-intro provider-guide import-helper">
+              <strong id="importHelperTitle">会话导入辅助</strong>
+              <p id="importHelperHint">可先复制提取脚本，在对应服务商的已登录页面执行，再把输出结果粘贴到这里自动识别。</p>
+              <p id="importAcceptedFormats"></p>
+              <div class="import-helper-actions">
+                <button class="btn btn-secondary" id="copyImportSnippetButton" type="button">复制提取脚本</button>
+                <button class="btn btn-primary" id="applyImportPayloadButton" type="button">识别并填入</button>
+                <button class="btn btn-secondary" id="clearImportPayloadButton" type="button">清空原始内容</button>
+              </div>
+              <textarea id="importPayloadInput" rows="7" placeholder="把控制台输出、Cookie 文本、storageJson、requestPara JSON，或 HAR 文件内容粘贴到这里"></textarea>
+              <div class="form-feedback" id="importPayloadFeedback"></div>
             </div>
 
             <div class="form-intro">
               <strong>采集凭据</strong>
-              <p>字段会随水、电、燃以及服务商自动切换，适合直接在后台维护 `cookieHeader`、`sessionToken`、`storageJson` 等采集信息。</p>
+              <p>字段会随服务商自动切换，只保留当前真实需要的最小集合。</p>
             </div>
 
             <div class="form-grid" id="credentialFieldsGrid"></div>
 
-            <label class="form-field">
+            <label class="form-field" id="accountNotesField">
               <span>备注</span>
-              <textarea id="accountNotesInput" name="notes" rows="3" placeholder="记录登录说明、验证码方式、特殊备注"></textarea>
+              <textarea id="accountNotesInput" name="notes" rows="3" placeholder="记录住址、户名、抓取来源或补充说明"></textarea>
             </label>
 
             <label class="checkbox-field">
@@ -186,7 +205,7 @@
         <div class="section-head">
           <div>
             <h3>采集任务</h3>
-            <p>这里展示真实的采集任务状态，可直接手动触发同步。</p>
+            <p>这里展示真实采集任务状态，可直接手动触发同步。</p>
           </div>
         </div>
         <div class="stack-list" id="jobList"></div>
@@ -196,7 +215,7 @@
         <div class="section-head">
           <div>
             <h3>手工账单入库</h3>
-            <p>当某个渠道临时无法自动采集时，可以先从这里录入账单，统计与推送仍然可用。</p>
+            <p>当某个渠道暂时无法自动采集时，可以先手工录入账单，统计和推送仍然可用。</p>
           </div>
         </div>
 
@@ -283,7 +302,7 @@
           <div class="section-head">
             <div>
               <h3>推送与统计配置</h3>
-              <p>当前先展示现有配置，后续可以继续接入保存接口。</p>
+              <p>当前先展示已有配置，后续可继续接入保存接口。</p>
             </div>
           </div>
           <div class="settings-grid" id="settingsGrid"></div>
@@ -314,6 +333,6 @@
     </main>
   </div>
 
-  <script src="./admin.js"></script>
+  <script type="module" src="./admin.js"></script>
 </body>
 </html>

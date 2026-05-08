@@ -4,10 +4,12 @@
     runtime: {},
     summary: {},
     providers: [],
-    accounts: []
+    accounts: [],
+    editingAccount: null
   };
 
   document.addEventListener("DOMContentLoaded", () => {
+    patchStaticCopy();
     init().catch((error) => {
       renderFatal(error.message || "后台加载失败");
     });
@@ -19,6 +21,64 @@
     await loadPage();
     resetAccountForm();
     resetBillForm();
+  }
+
+  function patchStaticCopy() {
+    document.title = "家庭水电燃账本 - 管理后台";
+
+    setNodeText(".brand-subtitle", "家庭采集后台");
+    setNodeText(".nav-group .nav-label", "导航");
+    setNodeText(".nav-item[href='#overview']", "后台仪表盘");
+    setNodeText(".nav-item[href='#accounts']", "账号配置");
+    setNodeText(".nav-item[href='#jobs']", "采集任务");
+    setNodeText(".nav-item[href='#bill-entry']", "手工账单");
+    setNodeText(".nav-item[href='#health']", "系统健康");
+    setNodeText(".nav-item[href='#settings']", "推送与规则");
+    setNodeText(".nav-item[href='#logs']", "运行日志");
+    setNodeText(".sidebar-footer .nav-item[href='/dashboard']", "进入前台");
+    setNodeText(".sidebar-footer .nav-item[href='/logout']", "退出登录");
+
+    setNodeText(".page-header .eyebrow", "管理后台");
+    setNodeText(".page-header h1", "采集、账单与企业微信推送总控台");
+    setNodeText(".page-description", "用于维护水、电、燃账号，测试采集连接，触发同步任务，并查看系统运行状态。");
+
+    setNodeText(".hero-panel .eyebrow", "状态总览");
+    setNodeText("#refreshPageButton", "刷新数据");
+    setNodeText("#logoutButton", "退出登录");
+
+    setNodeText("#pending .section-head h3", "待处理事项");
+    setNodeText("#health .section-head h3", "系统健康");
+
+    setNodeText("#accounts .section-head h3", "账号配置");
+    setNodeText("#accounts .section-head p", "在这里配置水、电、燃的真实采集账号与会话信息，所有凭据仅加密保存到数据库。");
+    setNodeText("#createAccountButton", "新增账号");
+    setNodeText("#resetAccountFormButton", "清空表单");
+    setNodeText("#saveAccountButton", "保存账号");
+    setNodeText("#testAccountButton", "测试连接");
+    setNodeText("#cancelEditAccountButton", "取消编辑");
+
+    setFieldLabel("accountNameInput", "账号名称");
+    setFieldLabel("utilityTypeInput", "能源类型");
+    setFieldLabel("providerInput", "服务商");
+    setFieldLabel("loginMethodInput", "登录方式");
+    setFieldLabel("accountNoInput", "账户号");
+    setFieldLabel("loginNameInput", "登录名");
+    setFieldLabel("accountNotesInput", "备注");
+    setCheckboxLabel("isPrimaryInput", "设为主账号");
+    setCheckboxLabel("clearCredentialsInput", "清空已保存凭据");
+
+    setNodeText("#jobs .section-head h3", "采集任务");
+    setNodeText("#jobs .section-head p", "这里展示真实的采集任务状态，可直接手动触发同步。");
+
+    setNodeText("#bill-entry .section-head h3", "手工账单入库");
+    setNodeText("#bill-entry .section-head p", "当某个渠道暂时无法自动采集时，可以先从这里录入账单，统计与推送仍然可用。");
+    setNodeText("#submitBillButton", "录入账单");
+    setNodeText("#resetBillFormButton", "清空账单表单");
+
+    setNodeText("#settings .section-head h3", "推送与统计配置");
+    setNodeText("#settings .section-head p", "当前先展示现有配置，后续可继续接入保存接口。");
+    setNodeText("#logs .section-head h3", "最近日志");
+    setNodeText("#logs .section-head p", "保留最近的后台运行记录，便于排查采集失败或配置问题。");
   }
 
   async function loadPage() {
@@ -46,7 +106,15 @@
     renderSettings();
     renderLogs();
     populateBillAccountOptions();
-    syncProviderOptions();
+
+    if (state.editingAccount?.id) {
+      const fresh = state.accounts.find((item) => String(item.id) === String(state.editingAccount.id));
+      if (fresh) {
+        fillAccountForm(fresh, { preserveFeedback: true });
+      }
+    } else {
+      syncProviderOptions(undefined, undefined, readCredentialDraft());
+    }
   }
 
   async function fetchJson(url, options = {}) {
@@ -91,12 +159,11 @@
 
   function renderHero() {
     const pendingCount = safeArray(state.summary.pending).length;
-    const healthScore = deriveHealthScore();
     setText("heroTitle", "家庭水电燃账单后台");
     setText("heroDescription", "在这里配置采集账号、测试连接、触发同步，并查看账单与运行日志。");
     setText("pendingCountValue", String(pendingCount));
     setText("pendingCountHint", pendingCount ? "存在需要人工关注的项目" : "当前没有待处理异常");
-    setText("healthScoreValue", healthScore);
+    setText("healthScoreValue", deriveHealthScore());
     setText("healthScoreHint", "采集链路与后台运行状态");
   }
 
@@ -110,7 +177,7 @@
       {
         label: "已配置凭据",
         value: String(state.accounts.filter((item) => item.credentialConfigured).length),
-        hint: "已加密保存后台凭据"
+        hint: "已加密保存 CK / Token / 会话信息"
       },
       {
         label: "活跃任务",
@@ -137,7 +204,7 @@
     const container = document.getElementById("pendingList");
     const items = safeArray(state.summary.pending);
     if (!items.length) {
-      container.innerHTML = `<div class="empty-state">当前没有待处理项目</div>`;
+      container.innerHTML = `<div class="empty-state">当前没有待处理事项</div>`;
       return;
     }
 
@@ -195,6 +262,7 @@
         </div>
         <div class="stack-item-actions">
           <span class="status-badge ${statusClass(item.status)}">${escapeHtml(item.status || "--")}</span>
+          <button class="btn btn-primary" data-test-account="${escapeHtml(String(item.id))}" type="button">测试</button>
           <button class="btn btn-secondary" data-edit-account="${escapeHtml(String(item.id))}" type="button">编辑</button>
           <button class="btn btn-ghost" data-toggle-account="${escapeHtml(String(item.id))}" type="button">
             ${item.status === "disabled" ? "启用" : "停用"}
@@ -351,11 +419,22 @@
       if (editButton) {
         editButton.disabled = true;
         try {
-          const result = await fetchJson(`/api/admin/accounts/${editButton.getAttribute("data-edit-account")}`);
-          fillAccountForm(result.item);
+          await loadAccountIntoForm(editButton.getAttribute("data-edit-account"));
           scrollToSection("accounts");
         } finally {
           editButton.disabled = false;
+        }
+      }
+
+      const testButton = event.target.closest("[data-test-account]");
+      if (testButton) {
+        testButton.disabled = true;
+        try {
+          await loadAccountIntoForm(testButton.getAttribute("data-test-account"));
+          scrollToSection("accounts");
+          await testCurrentAccount();
+        } finally {
+          testButton.disabled = false;
         }
       }
 
@@ -405,23 +484,31 @@
 
     disableForm(form, true);
     try {
+      let result;
       if (accountId) {
-        await fetchJson(`/api/admin/accounts/${accountId}`, {
+        result = await fetchJson(`/api/admin/accounts/${accountId}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload)
         });
-        setFeedback(feedback, "is-success", "账号已更新，新的后台凭据已经加密保存。");
       } else {
-        await fetchJson("/api/admin/accounts", {
+        result = await fetchJson("/api/admin/accounts", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload)
         });
-        setFeedback(feedback, "is-success", "账号已创建，后台凭据已经加密保存。");
       }
+
       await reloadPageData();
-      resetAccountForm();
+      if (result.item?.id) {
+        await loadAccountIntoForm(result.item.id, {
+          preserveFeedback: false,
+          feedbackClass: "is-success",
+          feedbackMessage: "账号已保存。已保存的 CK / storageJson 不会回显，留空也不会丢失；现在可以直接点“测试连接”。"
+        });
+      } else {
+        setFeedback(feedback, "is-success", "账号已保存。");
+      }
     } catch (error) {
       setFeedback(feedback, "is-error", error.message || "保存账号失败");
       throw error;
@@ -472,7 +559,7 @@
     const feedback = document.getElementById("accountFormFeedback");
     const accountId = document.getElementById("accountIdInput").value;
     if (!accountId) {
-      setFeedback(feedback, "is-error", "请先保存账号，再执行连接测试。");
+      setFeedback(feedback, "is-error", "请先新建账号，或点列表里的“编辑/测试”进入一个已保存账号。");
       return;
     }
 
@@ -481,8 +568,12 @@
       const result = await fetchJson(`/api/admin/accounts/${accountId}/test`, {
         method: "POST"
       });
-      setFeedback(feedback, "is-success", result.item?.summary || "连接测试成功");
       await reloadPageData();
+      await loadAccountIntoForm(accountId, {
+        preserveFeedback: false,
+        feedbackClass: "is-success",
+        feedbackMessage: result.item?.summary || "连接测试成功"
+      });
     } catch (error) {
       setFeedback(feedback, "is-error", error.message || "连接测试失败");
     }
@@ -492,26 +583,44 @@
     await loadPage();
   }
 
-  function fillAccountForm(account) {
-    document.getElementById("accountIdInput").value = account.id || "";
-    document.getElementById("accountNameInput").value = account.name || "";
-    document.getElementById("utilityTypeInput").value = account.utilityType || "electricity";
-    syncProviderOptions(account.provider, account.loginMethod, {});
-    document.getElementById("accountNoInput").value = account.accountNo || "";
-    document.getElementById("loginNameInput").value = account.loginName || "";
-    document.getElementById("accountNotesInput").value = account.notes || "";
-    document.getElementById("isPrimaryInput").checked = Boolean(account.isPrimary);
+  async function loadAccountIntoForm(accountId, options = {}) {
+    const result = await fetchJson(`/api/admin/accounts/${accountId}`);
+    fillAccountForm(result.item, options);
+    if (options.feedbackMessage) {
+      setFeedback(
+        document.getElementById("accountFormFeedback"),
+        options.feedbackClass || "",
+        options.feedbackMessage
+      );
+    }
+    return result.item;
+  }
+
+  function fillAccountForm(account, options = {}) {
+    state.editingAccount = account || null;
+    document.getElementById("accountIdInput").value = account?.id || "";
+    document.getElementById("accountNameInput").value = account?.name || "";
+    document.getElementById("utilityTypeInput").value = account?.utilityType || "electricity";
+    syncProviderOptions(account?.provider, account?.loginMethod, {});
+    document.getElementById("accountNoInput").value = account?.accountNo || "";
+    document.getElementById("loginNameInput").value = account?.loginName || "";
+    document.getElementById("accountNotesInput").value = account?.notes || "";
+    document.getElementById("isPrimaryInput").checked = Boolean(account?.isPrimary);
     document.getElementById("clearCredentialsInput").checked = false;
-    setText("accountFormTitle", `编辑账号：${account.name || "--"}`);
-    setText("accountFormHint", "出于安全原因，已保存的凭据不会回显；如需修改，请重新填写对应字段。");
-    setText("credentialStateChip", `凭据状态：${account.credentialConfigured ? "已配置" : "未配置"}`);
+    setText("accountFormTitle", `编辑账号：${account?.name || "--"}`);
+    setText("accountFormHint", "已保存的 CK、storageJson 不会回显，这是正常的安全行为；留空不会覆盖原值，重新填写才会更新。");
+    setText("credentialStateChip", `凭据状态：${account?.credentialConfigured ? "已配置" : "未配置"}`);
+    if (!options.preserveFeedback) {
+      setFeedback(document.getElementById("accountFormFeedback"), "", "");
+    }
   }
 
   function resetAccountForm() {
+    state.editingAccount = null;
     document.getElementById("accountForm").reset();
     document.getElementById("accountIdInput").value = "";
     setText("accountFormTitle", "新增账号");
-    setText("accountFormHint", "保存后凭据会加密写入数据库，不再依赖环境变量。");
+    setText("accountFormHint", "先填写基础信息和凭据后保存。保存后会自动进入该账号的编辑状态，你可以直接继续测试连接。");
     setText("credentialStateChip", "凭据状态：未配置");
     setFeedback(document.getElementById("accountFormFeedback"), "", "");
     syncProviderOptions(undefined, undefined, {});
@@ -566,6 +675,7 @@
   function renderCredentialFields(providerDef, draft = {}) {
     const grid = document.getElementById("credentialFieldsGrid");
     const fields = safeArray(providerDef?.credentialFields);
+    const isEditingSavedAccount = Boolean(state.editingAccount?.id && state.editingAccount?.credentialConfigured);
     if (!fields.length) {
       grid.innerHTML = `<div class="empty-state">当前服务商没有额外的凭据字段。</div>`;
       return;
@@ -576,9 +686,9 @@
       const label = escapeHtml(field.label || key || "--");
       const value = draft[key] || "";
       const multiline = /json|cookie|storage|notes|remark/i.test(key);
-      const placeholder = multiline
-        ? "留空则不保存；编辑已有账号时留空会保留数据库中的原值"
-        : "留空则不保存该字段";
+      const placeholder = isEditingSavedAccount
+        ? "留空表示继续使用已保存值；重新填写才会更新"
+        : (multiline ? "留空则不保存该字段" : "留空则不保存该字段");
 
       if (multiline) {
         return `
@@ -765,6 +875,29 @@
     const element = document.getElementById(id);
     if (element) {
       element.textContent = value;
+    }
+  }
+
+  function setNodeText(selector, value) {
+    const element = document.querySelector(selector);
+    if (element) {
+      element.textContent = value;
+    }
+  }
+
+  function setFieldLabel(id, value) {
+    const field = document.getElementById(id)?.closest(".form-field");
+    const label = field?.querySelector("span");
+    if (label) {
+      label.textContent = value;
+    }
+  }
+
+  function setCheckboxLabel(id, value) {
+    const field = document.getElementById(id)?.closest(".checkbox-field");
+    const label = field?.querySelector("span");
+    if (label) {
+      label.textContent = value;
     }
   }
 

@@ -6,7 +6,8 @@ import {
   recordCollectorRun,
   addSystemLog,
   updateAccountLastSyncedAt,
-  upsertCollectedBillRecord
+  upsertCollectedBillRecord,
+  upsertCollectedDailyRecord
 } from "./db.mjs";
 import { collectAccountBills, testAccountConnection } from "./collectors.mjs";
 
@@ -37,7 +38,9 @@ async function executeForAccount(db, account, triggerSource) {
   const details = await collectAccountBills(account, credentials);
   const stored = {
     inserted: 0,
-    skipped: 0
+    skipped: 0,
+    dailyInserted: 0,
+    dailyUpdated: 0
   };
 
   if (Array.isArray(details?.bills)) {
@@ -54,8 +57,23 @@ async function executeForAccount(db, account, triggerSource) {
     }
   }
 
-  const runSummary = stored.inserted || stored.skipped
-    ? `${details.summary}; inserted ${stored.inserted}, skipped ${stored.skipped}`
+  if (Array.isArray(details?.details?.recentDailyUsage)) {
+    for (const dailyItem of details.details.recentDailyUsage) {
+      const result = upsertCollectedDailyRecord(db, {
+        ...dailyItem,
+        accountId: account.id
+      });
+      if (result?.inserted) {
+        stored.dailyInserted += 1;
+      } else if (result) {
+        stored.dailyUpdated += 1;
+      }
+    }
+  }
+
+  const hasStoredChanges = stored.inserted || stored.skipped || stored.dailyInserted || stored.dailyUpdated;
+  const runSummary = hasStoredChanges
+    ? `${details.summary}; inserted ${stored.inserted}, skipped ${stored.skipped}, daily inserted ${stored.dailyInserted}, daily updated ${stored.dailyUpdated}`
     : details.summary;
   const runDetails = {
     ...(details.details || {}),

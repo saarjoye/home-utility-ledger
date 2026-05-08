@@ -1479,3 +1479,94 @@ export function upsertCollectedBillRecord(db, payload) {
     item
   };
 }
+
+export function upsertCollectedDailyRecord(db, payload) {
+  const account = getAccountById(db, payload.accountId);
+  if (!account) {
+    return null;
+  }
+
+  const usageDate = String(payload.usageDate || "").trim();
+  if (!usageDate) {
+    throw new Error("usageDate is required for collected daily records");
+  }
+
+  const usageValue = payload.usageValue === null || payload.usageValue === undefined || payload.usageValue === ""
+    ? null
+    : Number(payload.usageValue);
+  const amount = payload.amount === null || payload.amount === undefined || payload.amount === ""
+    ? null
+    : Number(payload.amount);
+
+  if (usageValue !== null && !Number.isFinite(usageValue)) {
+    throw new Error("usageValue must be a finite number for collected daily records");
+  }
+  if (amount !== null && !Number.isFinite(amount)) {
+    throw new Error("amount must be a finite number for collected daily records");
+  }
+
+  const sourceChannel = payload.sourceChannel || account.provider || "collector";
+  const usageUnit = payload.usageUnit || null;
+  const existing = db.prepare(`
+    SELECT *
+    FROM daily_records
+    WHERE account_id = ?
+      AND usage_date = ?
+      AND IFNULL(usage_unit, '') = IFNULL(?, '')
+      AND IFNULL(source_channel, '') = IFNULL(?, '')
+    ORDER BY id DESC
+    LIMIT 1
+  `).get(
+    payload.accountId,
+    usageDate,
+    usageUnit,
+    sourceChannel
+  );
+
+  const createdAt = nowIso();
+  if (existing) {
+    db.prepare(`
+      UPDATE daily_records
+      SET
+        usage_value = ?,
+        amount = ?,
+        currency = ?,
+        is_estimated = ?
+      WHERE id = ?
+    `).run(
+      usageValue,
+      amount,
+      payload.currency || "CNY",
+      payload.isEstimated ? 1 : 0,
+      existing.id
+    );
+
+    return {
+      inserted: false,
+      item: db.prepare("SELECT * FROM daily_records WHERE id = ? LIMIT 1").get(existing.id)
+    };
+  }
+
+  const result = db.prepare(`
+    INSERT INTO daily_records (
+      account_id, utility_type, usage_date, usage_value, usage_unit, amount, currency,
+      source_channel, is_estimated, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    payload.accountId,
+    account.utilityType,
+    usageDate,
+    usageValue,
+    usageUnit,
+    amount,
+    payload.currency || "CNY",
+    sourceChannel,
+    payload.isEstimated ? 1 : 0,
+    createdAt
+  );
+
+  return {
+    inserted: true,
+    item: db.prepare("SELECT * FROM daily_records WHERE id = ? LIMIT 1").get(result.lastInsertRowid)
+  };
+}

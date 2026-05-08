@@ -245,11 +245,15 @@ const providerDefinitionsForAdminUi = [
     utilityType: "electricity",
     provider: "网上国网（浙江）",
     loginMethods: [
+      "账号密码自动采集",
       "CK 会话导入"
     ],
     credentialFields: [
-      { key: "cookieHeader", label: "登录 Cookie（CK）", type: "password", required: true },
-      { key: "storageJson", label: "浏览器存储快照（storageJson）", type: "password", required: true }
+      { key: "username", label: "网上国网账号", type: "text", required: false },
+      { key: "password", label: "网上国网密码", type: "password", required: false },
+      { key: "relayBaseUrl", label: "中转服务地址（可留空）", type: "text", required: false },
+      { key: "cookieHeader", label: "登录 Cookie（CK）", type: "password", required: false },
+      { key: "storageJson", label: "浏览器存储快照（storageJson）", type: "password", required: false }
     ]
   },
   {
@@ -287,30 +291,51 @@ const providerDefinitionsClean = [
     key: "sgcc_zhejiang",
     utilityType: "electricity",
     provider: "网上国网（浙江）",
-    loginMethods: ["浏览器会话导入"],
+    loginMethods: ["账号密码自动采集", "浏览器会话导入"],
     form: {
       accountNoLabel: "用电户号（可留空）",
       accountNoPlaceholder: "如果同一账号下绑定多个用电户号，建议填写；单户号可留空",
       accountNoRequired: false,
       loginNameVisible: false,
       notesPlaceholder: "可记录住址、户名或抓取来源，非必填",
-      credentialIntro: "推荐方式：先在浏览器登录 95598 / 网上国网，再把会话导入到后台。",
-      sessionGuide: "短信验证码登录通常伴随滑块和风控校验，不适合在服务器 Docker 中做长期稳定的纯自动登录。"
+      credentialIntro: "当前支持两种方式：1. 账号密码自动采集；2. 浏览器 CK 会话导入作为备用兜底。",
+      sessionGuide: "账号密码模式当前参考社区成熟方案，链路中涉及第三方中转服务做加密/解密与风控初始化；如果你介意凭据外发，请改用浏览器 CK 会话导入模式。"
     },
     credentialFields: [
+      {
+        key: "username",
+        label: "网上国网账号",
+        type: "text",
+        required: false,
+        helpText: "填写后将优先走账号密码自动采集链路。"
+      },
+      {
+        key: "password",
+        label: "网上国网密码",
+        type: "password",
+        required: false,
+        helpText: "与网上国网账号配套使用；如果填写了账号和密码，系统会优先尝试自动登录。"
+      },
+      {
+        key: "relayBaseUrl",
+        label: "中转服务地址（可留空）",
+        type: "text",
+        required: false,
+        helpText: "默认使用社区方案里的中转服务地址；只有你自建了兼容服务时才需要改这里。"
+      },
       {
         key: "cookieHeader",
         label: "登录 Cookie（CK）",
         type: "password",
-        required: true,
-        helpText: "从已登录的 95598 / 网上国网页面复制整段 Cookie。"
+        required: false,
+        helpText: "备用方式：从已登录的 95598 / 网上国网页面复制整段 Cookie。"
       },
       {
         key: "storageJson",
         label: "浏览器存储快照（storageJson，可选增强）",
         type: "password",
         required: false,
-        helpText: "只有 CK 单独无法进入账单页时，再补充 localStorage / sessionStorage 快照。"
+        helpText: "仅在使用 CK 会话导入，且 CK 单独无法进入账单页时，再补充 localStorage / sessionStorage 快照。"
       }
     ]
   },

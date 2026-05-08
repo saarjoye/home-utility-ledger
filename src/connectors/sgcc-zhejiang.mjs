@@ -6,14 +6,9 @@ function resolveConfigText(credentials, key, fallback = "") {
 function getPlaywrightConfig(credentials = {}) {
   const timeoutValue = Number(credentials.timeoutMs || process.env.SGCC_TIMEOUT_MS || 60000);
   return {
-    loginUrl: resolveConfigText(credentials, "loginUrl", process.env.SGCC_LOGIN_URL || "https://www.95598.cn/osgweb/login?status=0"),
-    homeUrl: resolveConfigText(credentials, "homeUrl", process.env.SGCC_HOME_URL || "https://www.95598.cn/osgweb/"),
-    summaryUrl: resolveConfigText(credentials, "summaryUrl", process.env.SGCC_SUMMARY_URL || "https://www.95598.cn/osgweb/electricitySummary"),
-    chargeUrl: resolveConfigText(credentials, "chargeUrl", process.env.SGCC_CHARGE_URL || "https://www.95598.cn/osgweb/electricityCharge"),
-    usernameSelector: resolveConfigText(credentials, "usernameSelector", process.env.SGCC_USERNAME_SELECTOR || ""),
-    passwordSelector: resolveConfigText(credentials, "passwordSelector", process.env.SGCC_PASSWORD_SELECTOR || ""),
-    submitSelector: resolveConfigText(credentials, "submitSelector", process.env.SGCC_SUBMIT_SELECTOR || ""),
-    successWaitFor: resolveConfigText(credentials, "successWaitFor", process.env.SGCC_SUCCESS_WAIT_FOR || ""),
+    homeUrl: resolveConfigText(credentials, "homeUrl", "https://www.95598.cn/osgweb/"),
+    summaryUrl: resolveConfigText(credentials, "summaryUrl", "https://www.95598.cn/osgweb/electricitySummary"),
+    chargeUrl: resolveConfigText(credentials, "chargeUrl", "https://www.95598.cn/osgweb/electricityCharge"),
     headless: String(credentials.headless ?? process.env.PLAYWRIGHT_HEADLESS ?? "true").toLowerCase() !== "false",
     timeoutMs: Math.max(10000, Number.isFinite(timeoutValue) ? timeoutValue : 60000)
   };
@@ -155,10 +150,54 @@ async function injectSessionSnapshot(page, context, config, credentials) {
   });
 }
 
+async function getPageDebugInfo(page) {
+  let title = "";
+  let bodyText = "";
+
+  try {
+    title = await page.title();
+  } catch {
+    title = "";
+  }
+
+  try {
+    bodyText = await page.evaluate(() => (document.body?.innerText || "").replace(/\s+/g, " ").trim().slice(0, 240));
+  } catch {
+    bodyText = "";
+  }
+
+  return {
+    url: page.url(),
+    title,
+    bodyText
+  };
+}
+
+function isLikelySgccLoginState(pageInfo) {
+  const haystack = `${pageInfo.url} ${pageInfo.title} ${pageInfo.bodyText}`;
+  return /login|status=0|登录|验证码|短信|滑块|请先登录/i.test(haystack);
+}
+
+function isLikelySecurityBlock(pageInfo) {
+  const haystack = `${pageInfo.title} ${pageInfo.bodyText}`;
+  return /安全验证|访问过于频繁|机器人|异常|风控|校验/i.test(haystack);
+}
+
 async function waitForVueApp(page, timeoutMs) {
-  await page.waitForFunction(() => Boolean(document.getElementById("app")?.__vue__), {
-    timeout: timeoutMs
-  });
+  try {
+    await page.waitForFunction(() => Boolean(document.getElementById("app")?.__vue__), {
+      timeout: timeoutMs
+    });
+  } catch {
+    const pageInfo = await getPageDebugInfo(page);
+    if (isLikelySgccLoginState(pageInfo)) {
+      throw new Error(`网上国网页面已回到登录态，当前导入的 CK / storageJson 很可能已失效。当前地址：${pageInfo.url}`);
+    }
+    if (isLikelySecurityBlock(pageInfo)) {
+      throw new Error(`网上国网页面触发了安全校验或风控，当前容器内无法继续提取数据。当前地址：${pageInfo.url}`);
+    }
+    throw new Error(`未能识别网上国网页面框架，无法进入账单页。当前地址：${pageInfo.url}；页面标题：${pageInfo.title || "未知"}；页面摘要：${pageInfo.bodyText || "空"}`);
+  }
 }
 
 async function findVueComponentData(page, predicateSource) {
@@ -363,6 +402,7 @@ async function testSgccSessionConnection({ account, credentials }) {
     }
     throw error;
   }
+
   return {
     ok: true,
     summary: "SGCC Zhejiang session is valid",
@@ -378,48 +418,6 @@ async function testSgccSessionConnection({ account, credentials }) {
 }
 
 function assertSgccSessionSnapshotForRuntime(credentials = {}) {
-  if (hasSessionSnapshot(credentials)) {
-    return;
-  }
-
-  throw new Error("网上国网目前只支持 CK 会话导入。请在后台填写登录 Cookie（CK）和 storageJson，不需要再填写登录页 URL、详情页 URL 或选择器。");
-}
-
-async function runLoginFlow({ account, credentials }) {
-  const config = getPlaywrightConfig(credentials);
-  if (!config.loginUrl || !config.usernameSelector || !config.passwordSelector || !config.submitSelector) {
-    throw new Error("SGCC 需要已导入的会话（cookieHeader + storageJson），或在后台账号凭据中补充登录页面 URL 与选择器配置");
-  }
-  if (!credentials.username || !credentials.password) {
-    throw new Error("SGCC account credentials require username and password");
-  }
-
-  return withBrowser(config, async ({ page }) => {
-    await page.goto(config.loginUrl, { waitUntil: "domcontentloaded", timeout: config.timeoutMs });
-    await page.locator(config.usernameSelector).fill(String(credentials.username));
-    await page.locator(config.passwordSelector).fill(String(credentials.password));
-    await page.locator(config.submitSelector).click();
-
-    if (config.successWaitFor) {
-      await page.locator(config.successWaitFor).waitFor({ timeout: 30000 });
-    } else {
-      await page.waitForLoadState("networkidle", { timeout: 30000 });
-    }
-
-    return {
-      ok: true,
-      summary: `Completed ${account.provider} login flow`,
-      details: {
-        provider: account.provider,
-        utilityType: account.utilityType,
-        loginUrl: config.loginUrl,
-        sessionMode: false
-      }
-    };
-  });
-}
-
-function assertSgccSessionSnapshot(credentials = {}) {
   if (hasSessionSnapshot(credentials)) {
     return;
   }
@@ -445,6 +443,7 @@ export async function collectSgccZhejiangBills({ account, credentials }) {
     }
     throw error;
   }
+
   const bills = mapSummaryBills(account, extracted.summaryAccount);
   const recentDailyUsage = Array.isArray(extracted.charge?.data?.sevenEleList)
     ? extracted.charge.data.sevenEleList.map((item) => ({

@@ -529,11 +529,20 @@ function isSgccPasswordModeUnavailableError(error) {
   return /GB002|请求异常.?GB002|账号密码登录失败：请求异常/.test(String(error || ""));
 }
 
+function buildRelayErrorWithStage(stage, error, extra = null) {
+  const message = String(error?.message || error || "").trim();
+  const suffix = extra ? ` ${extra}` : "";
+  return new Error(`[SGCC:${stage}] ${message}${suffix}`.trim());
+}
+
 function buildSgccPasswordModeUnavailableMessage(error) {
   const message = String(error?.message || error || "").trim();
+  const stageMatch = message.match(/\[SGCC:([^\]]+)\]/);
+  const stageText = stageMatch ? `失败阶段：${stageMatch[1]}` : null;
   return [
     "网上国网当前更稳定的方式是先在官网或 App 使用短信验证码登录，再导入后台里的 CK。",
     "你这次填写的账号密码链路没有通过，官网当前很可能已经不再稳定支持纯账号密码直登。",
+    stageText,
     message ? `原始返回：${message}` : null
   ]
     .filter(Boolean)
@@ -541,11 +550,15 @@ function buildSgccPasswordModeUnavailableMessage(error) {
 }
 
 async function getRelayKeyCode(relayBaseUrl, context) {
-  return requestViaRelay(relayBaseUrl, {
-    url: SGCC_API.getKeyCode,
-    method: "POST",
-    headers: {}
-  }, context);
+  try {
+    return await requestViaRelay(relayBaseUrl, {
+      url: SGCC_API.getKeyCode,
+      method: "POST",
+      headers: {}
+    }, context);
+  } catch (error) {
+    throw buildRelayErrorWithStage("getKeyCode", error);
+  }
 }
 
 async function loginViaRelay(relayBaseUrl, context, { username, password }, slider = null) {
@@ -577,64 +590,76 @@ async function loginViaRelay(relayBaseUrl, context, { username, password }, slid
         complexSliderType: getRelayCaptchaType(message)
       });
     }
-    throw new Error(`网上国网账号密码登录失败：${message}`);
+    throw buildRelayErrorWithStage("login", `网上国网账号密码登录失败：${message}`);
   }
 }
 
 async function getRelayAuthorizeCode(relayBaseUrl, context, bizrt) {
-  const result = await requestViaRelay(relayBaseUrl, {
-    url: SGCC_API.getAuth,
-    method: "POST",
-    headers: {
-      ...(context.requestKey || {}),
-      token: bizrt.token
+  try {
+    const result = await requestViaRelay(relayBaseUrl, {
+      url: SGCC_API.getAuth,
+      method: "POST",
+      headers: {
+        ...(context.requestKey || {}),
+        token: bizrt.token
+      }
+    }, context);
+    const redirectUrl = trimText(result?.redirect_url);
+    const match = redirectUrl.match(/[?&]code=([^&]+)/);
+    if (!match) {
+      throw new Error("网上国网授权码获取失败：redirect_url 中未找到 code");
     }
-  }, context);
-  const redirectUrl = trimText(result?.redirect_url);
-  const match = redirectUrl.match(/[?&]code=([^&]+)/);
-  if (!match) {
-    throw new Error("网上国网授权码获取失败：redirect_url 中未找到 code");
+    return match[1];
+  } catch (error) {
+    throw buildRelayErrorWithStage("authorize", error);
   }
-  return match[1];
 }
 
 async function getRelayAccessToken(relayBaseUrl, context, bizrt, authorizeCode) {
-  const result = await requestViaRelay(relayBaseUrl, {
-    url: SGCC_API.getWebToken,
-    method: "POST",
-    headers: {
-      ...(context.requestKey || {}),
-      token: bizrt.token,
-      authorizecode: authorizeCode
+  try {
+    const result = await requestViaRelay(relayBaseUrl, {
+      url: SGCC_API.getWebToken,
+      method: "POST",
+      headers: {
+        ...(context.requestKey || {}),
+        token: bizrt.token,
+        authorizecode: authorizeCode
+      }
+    }, context);
+    const accessToken = trimText(result?.access_token);
+    if (!accessToken) {
+      throw new Error("网上国网 accessToken 获取失败");
     }
-  }, context);
-  const accessToken = trimText(result?.access_token);
-  if (!accessToken) {
-    throw new Error("网上国网 accessToken 获取失败");
+    return accessToken;
+  } catch (error) {
+    throw buildRelayErrorWithStage("accessToken", error);
   }
-  return accessToken;
 }
 
 async function getRelayBindInfo(relayBaseUrl, context, bizrt, accessToken) {
-  const result = await requestViaRelay(relayBaseUrl, {
-    url: SGCC_API.searchUser,
-    method: "POST",
-    headers: {
-      ...(context.requestKey || {}),
-      token: bizrt.token,
-      acctoken: accessToken
-    },
-    data: {
-      serviceCode: SGCC_REQUEST_CONFIG.userInform.serviceCode,
-      source: SGCC_REQUEST_CONFIG.source,
-      target: SGCC_REQUEST_CONFIG.target,
-      uscInfo: { ...SGCC_REQUEST_CONFIG.uscInfo },
-      quInfo: { userId: bizrt.userInfo[0].userId },
-      token: bizrt.token,
-      Channels: "web"
-    }
-  }, context);
-  return result?.bizrt || result;
+  try {
+    const result = await requestViaRelay(relayBaseUrl, {
+      url: SGCC_API.searchUser,
+      method: "POST",
+      headers: {
+        ...(context.requestKey || {}),
+        token: bizrt.token,
+        acctoken: accessToken
+      },
+      data: {
+        serviceCode: SGCC_REQUEST_CONFIG.userInform.serviceCode,
+        source: SGCC_REQUEST_CONFIG.source,
+        target: SGCC_REQUEST_CONFIG.target,
+        uscInfo: { ...SGCC_REQUEST_CONFIG.uscInfo },
+        quInfo: { userId: bizrt.userInfo[0].userId },
+        token: bizrt.token,
+        Channels: "web"
+      }
+    }, context);
+    return result?.bizrt || result;
+  } catch (error) {
+    throw buildRelayErrorWithStage("bindInfo", error);
+  }
 }
 
 function pickRelayPowerUser(bindInfo, account) {
@@ -820,9 +845,14 @@ async function executeRelaySgccCollection(account, credentials) {
 
   const context = {
     timeoutMs,
-    riskContext: await initRelayRiskContext(relayBaseUrl, timeoutMs),
+    riskContext: null,
     requestKey: null
   };
+  try {
+    context.riskContext = await initRelayRiskContext(relayBaseUrl, timeoutMs);
+  } catch (error) {
+    throw buildRelayErrorWithStage("riskInit", error);
+  }
   context.requestKey = await getRelayKeyCode(relayBaseUrl, context);
 
   const bizrt = await loginViaRelay(relayBaseUrl, context, login);
@@ -842,6 +872,22 @@ async function executeRelaySgccCollection(account, credentials) {
 
   return {
     relayBaseUrl,
+    stage: "done",
+    debug: {
+      riskInit: {
+        hasDeviceToken: Boolean(trimText(context.riskContext?.deviceToken)),
+        hasTdcItoken: Boolean(trimText(context.riskContext?.tdcItoken)),
+        hasCollect: Boolean(trimText(context.riskContext?.collect)),
+        infoKeys: context.riskContext?.info && typeof context.riskContext.info === "object"
+          ? Object.keys(context.riskContext.info).slice(0, 20)
+          : []
+      },
+      requestKey: {
+        keys: context.requestKey && typeof context.requestKey === "object"
+          ? Object.keys(context.requestKey).slice(0, 20)
+          : []
+      }
+    },
     powerUser,
     electricityFee,
     dayUsage,
@@ -849,11 +895,10 @@ async function executeRelaySgccCollection(account, credentials) {
   };
 }
 
-function mapRelayMonthlyBills(account, monthUsage) {
-  const items = Array.isArray(monthUsage?.mothEleList) ? monthUsage.mothEleList : [];
+function mapMonthlyBillsFromRows(account, items, sourceChannel) {
   const bills = [];
 
-  for (const row of items) {
+  for (const row of Array.isArray(items) ? items : []) {
     const monthText = trimText(row.month || row.ym || row.yearMonth);
     const amount = toNumber(
       row.monthEleCost ||
@@ -883,7 +928,7 @@ function mapRelayMonthlyBills(account, monthUsage) {
       usageUnit: usageValue !== null ? "kWh" : null,
       amount,
       currency: "CNY",
-      sourceChannel: "95598.cn/api-relay",
+      sourceChannel,
       recordType: "bill",
       status: "confirmed",
       isEstimated: false,
@@ -892,6 +937,14 @@ function mapRelayMonthlyBills(account, monthUsage) {
   }
 
   return bills;
+}
+
+function mapRelayMonthlyBills(account, monthUsage) {
+  return mapMonthlyBillsFromRows(account, monthUsage?.mothEleList, "95598.cn/api-relay");
+}
+
+function mapChargeMonthlyBills(account, chargeData = {}) {
+  return mapMonthlyBillsFromRows(account, chargeData?.powerData?.mothEleList, "95598.cn/electricityCharge");
 }
 
 function mapRelayRecentDailyUsage(dayUsage) {
@@ -929,6 +982,8 @@ async function testSgccRelayConnection({ account, credentials }) {
       monthlyUsageCount: monthlyCount,
       currentBalance: toNumber(result.electricityFee?.sumMoney),
       relayBaseUrl: result.relayBaseUrl,
+      stage: result.stage,
+      debug: result.debug,
       sessionMode: false,
       apiMode: "relay-api"
     }
@@ -952,6 +1007,8 @@ async function collectSgccRelayBills({ account, credentials }) {
       powerUser: result.powerUser || null,
       relayBaseUrl: result.relayBaseUrl,
       stage: "relay-api"
+      ,
+      debug: result.debug
     },
     bills
   };
@@ -2068,7 +2125,8 @@ async function testSgccSessionConnection({ account, credentials }) {
         account.accountNo,
       billGroupCount: mergeSgccBills(
         mapSummaryBills(account, extracted.summaryAccount),
-        mapMy95598Bills(account, extracted.my95598?.data)
+        mapMy95598Bills(account, extracted.my95598?.data),
+        mapChargeMonthlyBills(account, extracted.charge?.data)
       ).length,
       dailyUsageCount: mapSgccRecentDailyUsage(extracted.charge?.data).length,
       sessionMode: true
@@ -2128,7 +2186,7 @@ export async function collectSgccZhejiangBills({ account, credentials }) {
     const bills = mergeSgccBills(
       mapSummaryBills(account, extracted.summaryAccount),
       mapMy95598Bills(account, extracted.my95598?.data),
-      mapRelayMonthlyBills(account, extracted.charge?.data?.powerData)
+      mapChargeMonthlyBills(account, extracted.charge?.data)
     );
     const recentDailyUsage = mapSgccRecentDailyUsage(extracted.charge?.data);
 
@@ -2165,7 +2223,7 @@ export async function collectSgccZhejiangBills({ account, credentials }) {
   const bills = mergeSgccBills(
     mapSummaryBills(account, extracted.summaryAccount),
     mapMy95598Bills(account, extracted.my95598?.data),
-    mapRelayMonthlyBills(account, extracted.charge?.data?.powerData)
+    mapChargeMonthlyBills(account, extracted.charge?.data)
   );
   const recentDailyUsage = mapSgccRecentDailyUsage(extracted.charge?.data);
 

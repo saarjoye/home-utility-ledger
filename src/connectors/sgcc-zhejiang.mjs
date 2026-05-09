@@ -2085,9 +2085,6 @@ function assertSgccSessionSnapshotForRuntime(credentials = {}) {
 }
 
 export async function testSgccZhejiangConnection({ account, credentials }) {
-  if (hasCdpSession(credentials) || hasSessionSnapshot(credentials)) {
-    return testSgccSessionConnection({ account, credentials });
-  }
   if (hasRelayCredentials(credentials, account)) {
     try {
       return await testSgccRelayConnection({ account, credentials });
@@ -2098,11 +2095,24 @@ export async function testSgccZhejiangConnection({ account, credentials }) {
       throw error;
     }
   }
+  if (hasCdpSession(credentials) || hasSessionSnapshot(credentials)) {
+    return testSgccSessionConnection({ account, credentials });
+  }
   assertSgccSessionSnapshotForRuntime(credentials);
   return testSgccSessionConnection({ account, credentials });
 }
 
 export async function collectSgccZhejiangBills({ account, credentials }) {
+  if (hasRelayCredentials(credentials, account)) {
+    try {
+      return await collectSgccRelayBills({ account, credentials });
+    } catch (error) {
+      if (isSgccPasswordModeUnavailableError(error)) {
+        throw new Error(buildSgccPasswordModeUnavailableMessage(error));
+      }
+      throw error;
+    }
+  }
   if (hasCdpSession(credentials) || hasSessionSnapshot(credentials)) {
     const config = getPlaywrightConfig(credentials);
     let extracted;
@@ -2138,16 +2148,6 @@ export async function collectSgccZhejiangBills({ account, credentials }) {
       },
       bills
     };
-  }
-  if (hasRelayCredentials(credentials, account)) {
-    try {
-      return await collectSgccRelayBills({ account, credentials });
-    } catch (error) {
-      if (isSgccPasswordModeUnavailableError(error)) {
-        throw new Error(buildSgccPasswordModeUnavailableMessage(error));
-      }
-      throw error;
-    }
   }
   assertSgccSessionSnapshotForRuntime(credentials);
 

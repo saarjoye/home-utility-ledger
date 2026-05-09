@@ -291,32 +291,46 @@ const providerDefinitionsClean = [
     key: "sgcc_zhejiang",
     utilityType: "electricity",
     provider: "网上国网（浙江）",
-    loginMethods: ["浏览器登录信息导入"],
+    loginMethods: ["账号密码登录", "浏览器登录信息导入"],
     form: {
       accountNoLabel: "用电户号（可留空）",
       accountNoPlaceholder: "如果同一账号下绑定多个用电户号，建议填写；单户号可留空",
       accountNoRequired: false,
       accountNoVisible: true,
       loginNameVisible: false,
-      loginMethodVisible: false,
+      loginMethodVisible: true,
       notesPlaceholder: "可记录住址、户名或抓取来源，非必填",
-      credentialIntro: "先在浏览器完成登录，再把已登录页面中的内容粘贴回来即可。",
-      sessionGuide: "通常只需要填写登录信息；只有测试未通过时，再补充页面信息。"
+      credentialIntro: "支持两种接入方式：直接填写国网账号密码，或导入浏览器中的已登录页面信息。",
+      sessionGuide: "建议优先使用账号密码登录；如果账号密码方式受限，再改用浏览器登录信息导入。"
     },
     credentialFields: [
+      {
+        key: "username",
+        label: "国网账号",
+        type: "text",
+        required: false,
+        helpText: "可直接填写网上国网账号。填写账号和密码后，系统会优先走账号密码登录。"
+      },
+      {
+        key: "password",
+        label: "国网密码",
+        type: "password",
+        required: false,
+        helpText: "与国网账号配套填写。"
+      },
       {
         key: "cookieHeader",
         label: "登录信息",
         type: "password",
-        required: true,
-        helpText: "从已登录页面复制即可。建议优先粘贴浏览器导出的完整登录信息。"
+        required: false,
+        helpText: "如果不走账号密码登录，可改为导入已登录页面中的完整登录信息。"
       },
       {
         key: "storageJson",
         label: "补充页面信息（可选）",
         type: "password",
         required: false,
-        helpText: "只有登录信息单独无法通过测试时，再补这一项。"
+        helpText: "只有登录信息单独无法通过测试时，再补这一项。账号密码登录通常不需要填写。"
       }
     ]
   },
@@ -384,23 +398,31 @@ const providerDefinitionsClean = [
 const sgccProviderDefinition = providerDefinitionsClean.find((item) => item.key === "sgcc_zhejiang");
 if (sgccProviderDefinition) {
   sgccProviderDefinition.provider = "网上国网（浙江）";
-  sgccProviderDefinition.loginMethods = ["短信登录后的登录信息导入"];
+  sgccProviderDefinition.loginMethods = ["账号密码登录", "浏览器登录信息导入"];
   sgccProviderDefinition.form = {
     ...sgccProviderDefinition.form,
     accountNoLabel: "用电户号（可留空）",
     accountNoPlaceholder: "如果同一账号下绑定多个用电户号，建议填写；单户号可留空",
     notesPlaceholder: "可记录住址、户名或抓取来源，非必填",
-    credentialIntro: "推荐先在浏览器完成短信登录，再把已登录页面中的内容粘贴到这里。",
-    sessionGuide: "一般先填登录信息即可；如果测试没有通过，再补页面信息。"
+    credentialIntro: "推荐先尝试账号密码登录；如账号密码方式不可用，再导入浏览器中的已登录页面信息。",
+    sessionGuide: "当账号密码与登录信息同时存在时，系统会优先使用账号密码登录。"
   };
 
   const fieldMap = Object.fromEntries(
     (sgccProviderDefinition.credentialFields || []).map((field) => [field.key, field])
   );
 
+  if (fieldMap.username) {
+    fieldMap.username.label = "国网账号";
+    fieldMap.username.helpText = "可直接填写网上国网账号。";
+  }
+  if (fieldMap.password) {
+    fieldMap.password.label = "国网密码";
+    fieldMap.password.helpText = "与国网账号配套填写。";
+  }
   if (fieldMap.cookieHeader) {
     fieldMap.cookieHeader.label = "登录信息";
-    fieldMap.cookieHeader.helpText = "推荐直接粘贴浏览器导出的完整登录信息。";
+    fieldMap.cookieHeader.helpText = "如不走账号密码登录，可直接粘贴浏览器导出的完整登录信息。";
   }
   if (fieldMap.storageJson) {
     fieldMap.storageJson.label = "补充页面信息（可选）";

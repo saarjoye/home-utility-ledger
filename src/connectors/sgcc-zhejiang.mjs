@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+
 function resolveConfigText(credentials, key, fallback = "") {
   const value = trimText(credentials?.[key]);
   return value || fallback;
@@ -7,10 +9,17 @@ function getPlaywrightConfig(credentials = {}) {
   const timeoutValue = Number(credentials.timeoutMs || process.env.SGCC_TIMEOUT_MS || 60000);
   return {
     homeUrl: resolveConfigText(credentials, "homeUrl", "https://www.95598.cn/osgweb/"),
-    summaryUrl: resolveConfigText(credentials, "summaryUrl", "https://www.95598.cn/osgweb/electricitySummary"),
+    summaryUrl: resolveConfigText(credentials, "summaryUrl", "https://www.95598.cn/osgweb/totalbill?partNo=P02021702"),
     chargeUrl: resolveConfigText(credentials, "chargeUrl", "https://www.95598.cn/osgweb/electricityCharge"),
+    myUrl: resolveConfigText(credentials, "myUrl", "https://www.95598.cn/osgweb/my95598?partNo=P0703"),
+    cdpUrl: resolveConfigText(credentials, "cdpUrl", trimText(process.env.SGCC_CDP_URL || "")),
     headless: String(credentials.headless ?? process.env.PLAYWRIGHT_HEADLESS ?? "true").toLowerCase() !== "false",
-    timeoutMs: Math.max(10000, Number.isFinite(timeoutValue) ? timeoutValue : 60000)
+    timeoutMs: Math.max(10000, Number.isFinite(timeoutValue) ? timeoutValue : 60000),
+    executablePath: trimText(
+      credentials.executablePath ||
+      process.env.PLAYWRIGHT_EXECUTABLE_PATH ||
+      process.env.MSEDGE_EXECUTABLE_PATH
+    )
   };
 }
 
@@ -21,6 +30,27 @@ async function loadChromium() {
   } catch {
     throw new Error("playwright dependency is not installed");
   }
+}
+
+function resolveSystemEdgeExecutable() {
+  const candidates = [
+    process.env["ProgramFiles(x86)"] ? `${process.env["ProgramFiles(x86)"]}\\Microsoft\\Edge\\Application\\msedge.exe` : "",
+    process.env.ProgramFiles ? `${process.env.ProgramFiles}\\Microsoft\\Edge\\Application\\msedge.exe` : "",
+    "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+    "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe"
+  ].filter(Boolean);
+
+  for (const item of candidates) {
+    try {
+      if (item && existsSync(item)) {
+        return item;
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return "";
 }
 
 function trimText(value) {
@@ -96,8 +126,78 @@ function parseCookieHeader(cookieHeader, domain = "www.95598.cn") {
     });
 }
 
+function normalizeImportedCookie(cookie, fallbackDomain = "www.95598.cn") {
+  if (!cookie || typeof cookie !== "object") {
+    return null;
+  }
+
+  const name = trimText(cookie.name);
+  const value = trimText(cookie.value);
+  if (!name) {
+    return null;
+  }
+
+  const normalized = {
+    name,
+    value,
+    domain: trimText(cookie.domain || fallbackDomain) || fallbackDomain,
+    path: trimText(cookie.path || "/") || "/",
+    httpOnly: typeof cookie.httpOnly === "boolean" ? cookie.httpOnly : String(cookie.httpOnly || "").toLowerCase() === "true",
+    secure: typeof cookie.secure === "boolean" ? cookie.secure : String(cookie.secure || "").toLowerCase() === "true"
+  };
+
+  const sameSite = trimText(cookie.sameSite || cookie.same_site);
+  if (["Strict", "Lax", "None"].includes(sameSite)) {
+    normalized.sameSite = sameSite;
+  }
+
+  const expiresValue = Number(cookie.expires ?? cookie.expirationDate ?? cookie.expiry);
+  if (Number.isFinite(expiresValue) && expiresValue > 0) {
+    normalized.expires = expiresValue;
+  }
+
+  return normalized;
+}
+
+function parseCookieCollection(value, fallbackDomain = "www.95598.cn") {
+  const parsed = parseJsonLenient(value);
+  if (!parsed) {
+    return [];
+  }
+
+  const items = Array.isArray(parsed)
+    ? parsed
+    : Array.isArray(parsed.cookies)
+      ? parsed.cookies
+      : [];
+
+  return items
+    .map((item) => normalizeImportedCookie(item, fallbackDomain))
+    .filter(Boolean);
+}
+
+function resolveImportedCookies(credentials = {}, domain = "www.95598.cn") {
+  const cookieCollection = parseCookieCollection(
+    credentials.cookiesJson ||
+    credentials.cookieJson ||
+    credentials.cookieHeader ||
+    credentials.cookies,
+    domain
+  );
+  if (cookieCollection.length) {
+    return cookieCollection;
+  }
+
+  const cookieHeader = trimText(credentials.cookieHeader || credentials.cookies);
+  if (!cookieHeader) {
+    return [];
+  }
+
+  return parseCookieHeader(cookieHeader, domain);
+}
+
 function hasSessionSnapshot(credentials = {}) {
-  return Boolean(trimText(credentials.cookieHeader || credentials.cookies));
+  return resolveImportedCookies(credentials).length > 0;
 }
 
 function hasStorageSnapshot(credentials = {}) {
@@ -107,6 +207,10 @@ function hasStorageSnapshot(credentials = {}) {
     trimText(credentials.localStorageJson) ||
     trimText(credentials.sessionSnapshot)
   );
+}
+
+function hasCdpSession(credentials = {}) {
+  return Boolean(trimText(credentials.cdpUrl || process.env.SGCC_CDP_URL));
 }
 
 const SGCC_RELAY_DEFAULT_BASE_URL = "https://api.120399.xyz";
@@ -855,34 +959,53 @@ async function collectSgccRelayBills({ account, credentials }) {
 
 async function createBrowserContext(config) {
   const chromium = await loadChromium();
-  const browser = await chromium.launch({ headless: config.headless });
+  if (config.cdpUrl) {
+    const browser = await chromium.connectOverCDP(config.cdpUrl);
+    const context = browser.contexts()[0];
+    if (!context) {
+      await browser.close();
+      throw new Error(`No browser context is available on CDP endpoint: ${config.cdpUrl}`);
+    }
+    const page = context.pages()[0] || await context.newPage();
+    return { browser, context, page, remote: true };
+  }
+  const launchOptions = { headless: config.headless };
+  const fallbackExecutablePath = resolveSystemEdgeExecutable();
+  if (config.executablePath) {
+    launchOptions.executablePath = config.executablePath;
+  } else if (fallbackExecutablePath) {
+    launchOptions.executablePath = fallbackExecutablePath;
+  }
+  const browser = await chromium.launch(launchOptions);
   const context = await browser.newContext();
   const page = await context.newPage();
   return { browser, context, page };
 }
 
 async function withBrowser(config, task) {
-  const { browser, context, page } = await createBrowserContext(config);
+  const { browser, context, page, remote } = await createBrowserContext(config);
   try {
     return await task({ browser, context, page });
   } finally {
-    await context.close();
+    if (!remote) {
+      await context.close();
+    }
     await browser.close();
   }
 }
 
 async function injectSessionSnapshot(page, context, config, credentials) {
-  const cookieHeader = trimText(credentials.cookieHeader || credentials.cookies);
+  if (config.cdpUrl) {
+    return;
+  }
+  const importedCookies = resolveImportedCookies(credentials);
   const snapshot = resolveStorageSnapshot(credentials);
 
-  if (!cookieHeader) {
-    throw new Error("SGCC session mode requires cookieHeader");
+  if (!importedCookies.length) {
+    throw new Error("SGCC session mode requires cookieHeader or cookie JSON");
   }
 
-  const cookies = parseCookieHeader(cookieHeader);
-  if (cookies.length) {
-    await context.addCookies(cookies);
-  }
+  await context.addCookies(importedCookies);
 
   await page.goto(config.homeUrl, {
     waitUntil: "domcontentloaded",
@@ -900,6 +1023,255 @@ async function injectSessionSnapshot(page, context, config, credentials) {
     localValues: snapshot.localStorage,
     sessionValues: snapshot.sessionStorage
   });
+}
+
+async function findExistingPageByUrlFragment(context, fragment) {
+  const pages = context.pages();
+  return pages.find((item) => item.url().includes(fragment)) || null;
+}
+
+async function readLiveCdpChargeSnapshot(page, timeoutMs) {
+  await page.bringToFront().catch(() => null);
+  await page.waitForFunction(() => {
+    const root = document.getElementById("app")?.__vue__;
+    const queue = [root, root?.firstElementChild?.__vue__].filter(Boolean);
+    const seen = new Set();
+    while (queue.length) {
+      const vm = queue.shift();
+      if (!vm || seen.has(vm._uid)) {
+        continue;
+      }
+      seen.add(vm._uid);
+      const sevenEleList = Array.isArray(vm._data?.sevenEleList) ? vm._data.sevenEleList : [];
+      const dataInfo = vm._data?.powerData?.dataInfo;
+      if (
+        sevenEleList.some((item) => {
+          const raw = String(item?.dayElePq ?? "").trim();
+          return item?.day && raw && raw !== "-";
+        }) &&
+        dataInfo &&
+        (dataInfo.totalEleNum !== undefined || dataInfo.totalEleCost !== undefined)
+      ) {
+        return true;
+      }
+      for (const child of vm.$children || []) {
+        queue.push(child);
+      }
+    }
+    return false;
+  }, { timeout: timeoutMs });
+
+  return page.evaluate(() => {
+    const root = document.getElementById("app")?.__vue__;
+    const queue = [root, root?.firstElementChild?.__vue__].filter(Boolean);
+    const seen = new Set();
+    const results = [];
+
+    while (queue.length) {
+      const vm = queue.shift();
+      if (!vm || seen.has(vm._uid)) {
+        continue;
+      }
+      seen.add(vm._uid);
+
+      const data = vm._data || {};
+      const sevenEleList = Array.isArray(data.sevenEleList) ? data.sevenEleList : [];
+      const validDailyCount = sevenEleList.filter((item) => {
+        const raw = String(item?.dayElePq ?? "").trim();
+        return item?.day && raw && raw !== "-";
+      }).length;
+      const monthListCount = Array.isArray(data.powerData?.mothEleList) ? data.powerData.mothEleList.length : 0;
+      const hasAnnualSummary = Boolean(
+        data.powerData?.dataInfo &&
+        (data.powerData.dataInfo.totalEleNum !== undefined || data.powerData.dataInfo.totalEleCost !== undefined)
+      );
+      const score = validDailyCount * 10 + monthListCount * 5 + (hasAnnualSummary ? 3 : 0);
+
+      if (score > 0) {
+        results.push({
+          uid: vm._uid,
+          name: vm.$options?.name || null,
+          route: vm.$route ? {
+            path: vm.$route.path,
+            fullPath: vm.$route.fullPath,
+            name: vm.$route.name
+          } : null,
+          data,
+          props: vm.$props || null,
+          score
+        });
+      }
+
+      for (const child of vm.$children || []) {
+        queue.push(child);
+      }
+    }
+
+    return results.sort((a, b) => b.score - a.score)[0] || null;
+  });
+}
+
+async function readLiveCdpSummarySnapshot(page, timeoutMs) {
+  await page.bringToFront().catch(() => null);
+  await page.waitForFunction(() => {
+    const root = document.getElementById("app")?.__vue__;
+    const queue = [root, root?.firstElementChild?.__vue__].filter(Boolean);
+    const seen = new Set();
+    while (queue.length) {
+      const vm = queue.shift();
+      if (!vm || seen.has(vm._uid)) {
+        continue;
+      }
+      seen.add(vm._uid);
+      if ((vm.$options?.name || "") === "eleSum" && Array.isArray(vm._data?.billNumberList)) {
+        return true;
+      }
+      for (const child of vm.$children || []) {
+        queue.push(child);
+      }
+    }
+    return false;
+  }, { timeout: timeoutMs });
+
+  return page.evaluate(() => {
+    const root = document.getElementById("app")?.__vue__;
+    const queue = [root, root?.firstElementChild?.__vue__].filter(Boolean);
+    const seen = new Set();
+    while (queue.length) {
+      const vm = queue.shift();
+      if (!vm || seen.has(vm._uid)) {
+        continue;
+      }
+      seen.add(vm._uid);
+      if ((vm.$options?.name || "") === "eleSum" && Array.isArray(vm._data?.billNumberList)) {
+        return {
+          uid: vm._uid,
+          name: vm.$options?.name || null,
+          route: vm.$route ? {
+            path: vm.$route.path,
+            fullPath: vm.$route.fullPath,
+            name: vm.$route.name
+          } : null,
+          data: vm._data || null,
+          props: vm.$props || null
+        };
+      }
+      for (const child of vm.$children || []) {
+        queue.push(child);
+      }
+    }
+    return null;
+  });
+}
+
+async function readLiveCdpMy95598Snapshot(page, timeoutMs) {
+  await page.bringToFront().catch(() => null);
+  await page.waitForFunction(() => {
+    const root = document.getElementById("app")?.__vue__;
+    const queue = [root, root?.firstElementChild?.__vue__].filter(Boolean);
+    const seen = new Set();
+    while (queue.length) {
+      const vm = queue.shift();
+      if (!vm || seen.has(vm._uid)) {
+        continue;
+      }
+      seen.add(vm._uid);
+      if (
+        (Array.isArray(vm._data?.monthData) && vm._data.monthData.length > 0) ||
+        (Array.isArray(vm._data?.mothEleList) && vm._data.mothEleList.length > 0)
+      ) {
+        return true;
+      }
+      for (const child of vm.$children || []) {
+        queue.push(child);
+      }
+    }
+    return false;
+  }, { timeout: timeoutMs });
+
+  return page.evaluate(() => {
+    const root = document.getElementById("app")?.__vue__;
+    const queue = [root, root?.firstElementChild?.__vue__].filter(Boolean);
+    const seen = new Set();
+    const results = [];
+
+    while (queue.length) {
+      const vm = queue.shift();
+      if (!vm || seen.has(vm._uid)) {
+        continue;
+      }
+      seen.add(vm._uid);
+
+      const data = vm._data || {};
+      const score =
+        (Array.isArray(data.monthData) ? data.monthData.length : 0) * 6 +
+        (Array.isArray(data.eleNum) ? data.eleNum.length : 0) * 6 +
+        (Array.isArray(data.eleCost) ? data.eleCost.length : 0) * 6 +
+        (Array.isArray(data.mothEleList) ? data.mothEleList.length : 0) * 10;
+
+      if (score > 0) {
+        results.push({
+          uid: vm._uid,
+          name: vm.$options?.name || null,
+          route: vm.$route ? {
+            path: vm.$route.path,
+            fullPath: vm.$route.fullPath,
+            name: vm.$route.name
+          } : null,
+          data,
+          props: vm.$props || null,
+          score
+        });
+      }
+
+      for (const child of vm.$children || []) {
+        queue.push(child);
+      }
+    }
+
+    return results.sort((a, b) => b.score - a.score)[0] || null;
+  });
+}
+
+async function extractSgccSessionDataFromLiveCdp(config, account) {
+  const chromium = await loadChromium();
+  const browser = await chromium.connectOverCDP(config.cdpUrl);
+  try {
+    const context = browser.contexts()[0];
+    if (!context) {
+      throw new Error(`No browser context is available on CDP endpoint: ${config.cdpUrl}`);
+    }
+
+    const chargePage = await findExistingPageByUrlFragment(context, "/electricityCharge");
+    if (!chargePage) {
+      throw new Error("No electricityCharge page is currently open in the live SGCC browser session");
+    }
+    const charge = await readLiveCdpChargeSnapshot(chargePage, config.timeoutMs);
+
+    let summary = null;
+    let summaryAccount = null;
+    const summaryPage =
+      await findExistingPageByUrlFragment(context, "/electricitySummary") ||
+      await findExistingPageByUrlFragment(context, "/totalbill");
+    if (summaryPage) {
+      summary = await readLiveCdpSummarySnapshot(summaryPage, config.timeoutMs).catch(() => null);
+      summaryAccount = pickSummaryAccount(summary?.data, account);
+    }
+
+    const myPage = await findExistingPageByUrlFragment(context, "/my95598");
+    const my95598 = myPage
+      ? await readLiveCdpMy95598Snapshot(myPage, config.timeoutMs).catch(() => null)
+      : null;
+
+    return {
+      summary,
+      summaryAccount,
+      charge,
+      my95598
+    };
+  } finally {
+    await browser.close();
+  }
 }
 
 async function getPageDebugInfo(page) {
@@ -1075,11 +1447,13 @@ async function findVueComponentData(page, predicateSource) {
   }, predicateSource);
 }
 
-async function loadSummarySnapshot(page, config) {
-  await page.goto(config.summaryUrl, {
-    waitUntil: "domcontentloaded",
-    timeout: config.timeoutMs
-  });
+async function loadSummarySnapshot(page, config, options = {}) {
+  if (options.navigate !== false) {
+    await page.goto(config.summaryUrl, {
+      waitUntil: "domcontentloaded",
+      timeout: config.timeoutMs
+    });
+  }
   await waitForVueApp(page, config.timeoutMs);
   await waitForVueData(page, () => {
     const root = document.getElementById("app")?.__vue__;
@@ -1091,8 +1465,22 @@ async function loadSummarySnapshot(page, config) {
         continue;
       }
       seen.add(vm._uid);
-      if ((vm.$options?.name || "") === "eleSum" && Array.isArray(vm._data?.billNumberList)) {
-        return vm._data.billNumberList.length > 0;
+      const name = vm.$options?.name || "";
+      if (name === "eleSum" && Array.isArray(vm._data?.billNumberList) && vm._data.billNumberList.length > 0) {
+        return true;
+      }
+      if (name === "numberList" && Array.isArray(vm._data?.listData) && vm._data.listData.length > 0) {
+        return true;
+      }
+      if (
+        (name === "jmBillingInformation" || name === "totalbillNew") &&
+        (
+          (Array.isArray(vm._data?.billList) && vm._data.billList.length > 0) ||
+          (Array.isArray(vm._data?.nowBillList?.billList) && vm._data.nowBillList.billList.length > 0) ||
+          vm._data?.nowBillList?.basicInfo
+        )
+      ) {
+        return true;
       }
       for (const child of vm.$children || []) {
         queue.push(child);
@@ -1105,14 +1493,63 @@ async function loadSummarySnapshot(page, config) {
     missingHint: "当前会话可能没有进入正确账单页、目标户号账单列表为空，或国网页面结构发生变化"
   });
 
-  return findVueComponentData(page, "(vm) => (vm.$options?.name || '') === 'eleSum' && Array.isArray(vm._data?.billNumberList)");
+  return page.evaluate(() => {
+    const root = document.getElementById("app")?.__vue__;
+    if (!root) {
+      return null;
+    }
+
+    const queue = [root, root.firstElementChild?.__vue__].filter(Boolean);
+    const seen = new Set();
+    const results = [];
+
+    while (queue.length) {
+      const vm = queue.shift();
+      if (!vm || seen.has(vm._uid)) {
+        continue;
+      }
+      seen.add(vm._uid);
+
+      const name = String(vm.$options?.name || "").trim();
+      const data = vm._data || {};
+      const score =
+        (Array.isArray(data.billNumberList) ? data.billNumberList.length : 0) * 10 +
+        (Array.isArray(data.listData) ? data.listData.length : 0) * 8 +
+        (Array.isArray(data.billList) ? data.billList.length : 0) * 6 +
+        (Array.isArray(data.nowBillList?.billList) ? data.nowBillList.billList.length : 0) * 6 +
+        (data.nowBillList?.basicInfo ? 3 : 0);
+
+      if (score > 0) {
+        results.push({
+          uid: vm._uid,
+          name,
+          route: vm.$route ? {
+            path: vm.$route.path,
+            fullPath: vm.$route.fullPath,
+            name: vm.$route.name
+          } : null,
+          data,
+          props: vm.$props || null,
+          score
+        });
+      }
+
+      for (const child of vm.$children || []) {
+        queue.push(child);
+      }
+    }
+
+    return results.sort((a, b) => b.score - a.score)[0] || null;
+  });
 }
 
-async function loadChargeSnapshot(page, config) {
-  await page.goto(config.chargeUrl, {
-    waitUntil: "domcontentloaded",
-    timeout: config.timeoutMs
-  });
+async function loadChargeSnapshot(page, config, options = {}) {
+  if (options.navigate !== false) {
+    await page.goto(config.chargeUrl, {
+      waitUntil: "domcontentloaded",
+      timeout: config.timeoutMs
+    });
+  }
   await waitForVueApp(page, config.timeoutMs);
   await waitForVueData(page, () => {
     const root = document.getElementById("app")?.__vue__;
@@ -1124,7 +1561,16 @@ async function loadChargeSnapshot(page, config) {
         continue;
       }
       seen.add(vm._uid);
-      if (vm._data?.powerData && Array.isArray(vm._data?.sevenEleList)) {
+      const sevenEleList = Array.isArray(vm._data?.sevenEleList) ? vm._data.sevenEleList : [];
+      const dataInfo = vm._data?.powerData?.dataInfo;
+      if (
+        sevenEleList.some((item) => {
+          const raw = String(item?.dayElePq ?? "").trim();
+          return item?.day && raw && raw !== "-";
+        }) &&
+        dataInfo &&
+        (dataInfo.totalEleNum !== undefined || dataInfo.totalEleCost !== undefined)
+      ) {
         return true;
       }
       for (const child of vm.$children || []) {
@@ -1138,7 +1584,144 @@ async function loadChargeSnapshot(page, config) {
     missingHint: "当前会话可能没有进入正确电量分析页、页面数据尚未返回，或国网页面结构发生变化"
   });
 
-  return findVueComponentData(page, "(vm) => Boolean(vm._data?.powerData) && Array.isArray(vm._data?.sevenEleList)");
+  return page.evaluate(() => {
+    const root = document.getElementById("app")?.__vue__;
+    if (!root) {
+      return null;
+    }
+
+    const queue = [root, root.firstElementChild?.__vue__].filter(Boolean);
+    const seen = new Set();
+    const results = [];
+
+    while (queue.length) {
+      const vm = queue.shift();
+      if (!vm || seen.has(vm._uid)) {
+        continue;
+      }
+      seen.add(vm._uid);
+
+      const data = vm._data || {};
+      const sevenEleList = Array.isArray(data.sevenEleList) ? data.sevenEleList : [];
+      const validDailyCount = sevenEleList.filter((item) => {
+        const raw = String(item?.dayElePq ?? "").trim();
+        return item?.day && raw && raw !== "-";
+      }).length;
+      const hasAnnualSummary = Boolean(
+        data.powerData?.dataInfo &&
+        (data.powerData.dataInfo.totalEleNum !== undefined || data.powerData.dataInfo.totalEleCost !== undefined)
+      );
+      const score = validDailyCount * 10 + (hasAnnualSummary ? 5 : 0);
+
+      if (score > 0) {
+        results.push({
+          uid: vm._uid,
+          name: vm.$options?.name || null,
+          route: vm.$route ? {
+            path: vm.$route.path,
+            fullPath: vm.$route.fullPath,
+            name: vm.$route.name
+          } : null,
+          data,
+          props: vm.$props || null,
+          score
+        });
+      }
+
+      for (const child of vm.$children || []) {
+        queue.push(child);
+      }
+    }
+
+    return results.sort((a, b) => b.score - a.score)[0] || null;
+  });
+}
+
+async function loadMy95598Snapshot(page, config, options = {}) {
+  if (options.navigate !== false) {
+    await page.goto(config.myUrl, {
+      waitUntil: "domcontentloaded",
+      timeout: config.timeoutMs
+    });
+  }
+  await waitForVueApp(page, config.timeoutMs);
+  await waitForVueData(page, () => {
+    const root = document.getElementById("app")?.__vue__;
+    const queue = [root, root?.firstElementChild?.__vue__].filter(Boolean);
+    const seen = new Set();
+    while (queue.length) {
+      const vm = queue.shift();
+      if (!vm || seen.has(vm._uid)) {
+        continue;
+      }
+      seen.add(vm._uid);
+      if (
+        (Array.isArray(vm._data?.monthData) && vm._data.monthData.length > 0) ||
+        (Array.isArray(vm._data?.mothEleList) && vm._data.mothEleList.length > 0) ||
+        (Array.isArray(vm._data?.powerUserList) && vm._data.powerUserList.length > 0) ||
+        (Array.isArray(vm._data?.mixinPowerUserList) && vm._data.mixinPowerUserList.length > 0)
+      ) {
+        return true;
+      }
+      for (const child of vm.$children || []) {
+        queue.push(child);
+      }
+    }
+    return false;
+  }, {
+    timeoutMs: config.timeoutMs,
+    stage: "我的95598页",
+    missingHint: "当前会话可能没有恢复到个人中心户号上下文，或页面结构发生变化"
+  });
+
+  return page.evaluate(() => {
+    const root = document.getElementById("app")?.__vue__;
+    if (!root) {
+      return null;
+    }
+
+    const queue = [root, root.firstElementChild?.__vue__].filter(Boolean);
+    const seen = new Set();
+    const results = [];
+
+    while (queue.length) {
+      const vm = queue.shift();
+      if (!vm || seen.has(vm._uid)) {
+        continue;
+      }
+      seen.add(vm._uid);
+
+      const data = vm._data || {};
+      const score =
+        (Array.isArray(data.monthData) ? data.monthData.length : 0) * 6 +
+        (Array.isArray(data.eleNum) ? data.eleNum.length : 0) * 6 +
+        (Array.isArray(data.eleCost) ? data.eleCost.length : 0) * 6 +
+        (Array.isArray(data.mothEleList) ? data.mothEleList.length : 0) * 10 +
+        (Array.isArray(data.powerUserList) ? data.powerUserList.length : 0) * 2 +
+        (Array.isArray(data.mixinPowerUserList) ? data.mixinPowerUserList.length : 0) * 2;
+
+      if (score > 0) {
+        results.push({
+          uid: vm._uid,
+          name: vm.$options?.name || null,
+          route: vm.$route ? {
+            path: vm.$route.path,
+            fullPath: vm.$route.fullPath,
+            name: vm.$route.name
+          } : null,
+          data,
+          props: vm.$props || null,
+          score
+        });
+      }
+
+      for (const child of vm.$children || []) {
+        queue.push(child);
+      }
+    }
+
+    return results.sort((a, b) => b.score - a.score)[0] || null;
+  });
 }
 
 function normalizeDate(value) {
@@ -1167,71 +1750,296 @@ function toNumber(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function normalizeMonth(value) {
+  const raw = trimText(value).replace(/[./]/g, "-");
+  if (!raw) {
+    return "";
+  }
+  const compact = raw.replace(/-/g, "");
+  if (/^\d{6}$/.test(compact)) {
+    return compact;
+  }
+  const match = raw.match(/^(\d{4})-(\d{1,2})$/);
+  if (match) {
+    return `${match[1]}${match[2].padStart(2, "0")}`;
+  }
+  return compact;
+}
+
+function getSgccAccountNumber(source) {
+  return trimText(
+    source?.consNoDst ||
+    source?.consNo_dst ||
+    source?.consNo ||
+    source?.userNo ||
+    source?.acctNo
+  );
+}
+
+function getSgccBillAmount(row) {
+  return toNumber(
+    row?.monthAmt ||
+    row?.monthEleCost ||
+    row?.monthCost ||
+    row?.amt ||
+    row?.amount ||
+    row?.eleCost
+  );
+}
+
+function getSgccBillUsage(row) {
+  return toNumber(
+    row?.monthPq ||
+    row?.monthEleNum ||
+    row?.monthNum ||
+    row?.eleNum ||
+    row?.pq ||
+    row?.totalPq
+  );
+}
+
+function buildSgccBillRecord(account, row, context = {}) {
+  const monthText = normalizeMonth(
+    row?.ym ||
+    row?.month ||
+    row?.yearMonth ||
+    context?.ym
+  );
+  const statementDate = normalizeDate(`${monthText}01`) || normalizeDate(row?.issuDate) || normalizeDate(row?.statementDate);
+  const amount = getSgccBillAmount(row);
+  const usageValue = getSgccBillUsage(row);
+  if (!statementDate || amount === null) {
+    return null;
+  }
+
+  return {
+    accountId: account.id,
+    statementDate,
+    periodStart: normalizeDate(row?.begDate) || normalizeDate(`${monthText}01`) || null,
+    periodEnd: normalizeDate(row?.endDate) || normalizeDate(row?.readDate) || statementDate,
+    usageValue,
+    usageUnit: usageValue !== null ? "kWh" : null,
+    amount,
+    currency: "CNY",
+    sourceChannel: context.sourceChannel || "95598.cn/totalbill",
+    recordType: "bill",
+    status: "confirmed",
+    isEstimated: false,
+    raw: context.raw || row
+  };
+}
+
 function pickSummaryAccount(summaryData, account) {
-  const items = Array.isArray(summaryData?.billNumberList) ? summaryData.billNumberList : [];
+  const items = [];
+  if (Array.isArray(summaryData?.billNumberList)) {
+    items.push(...summaryData.billNumberList);
+  }
+  if (Array.isArray(summaryData?.listData)) {
+    items.push(...summaryData.listData);
+  }
   const accountNo = trimText(account.accountNo);
   if (!accountNo) {
     return items[0] || null;
   }
-  return items.find((item) => trimText(item.consNoDst || item.consNo_dst) === accountNo) || items[0] || null;
+  return items.find((item) => getSgccAccountNumber(item) === accountNo) || items[0] || null;
 }
 
 function mapSummaryBills(account, summaryAccount) {
-  const groups = Array.isArray(summaryAccount?.billList) ? summaryAccount.billList : [];
   const bills = [];
+  const directRows = Array.isArray(summaryAccount?.billList) ? summaryAccount.billList : [];
 
-  for (const group of groups) {
-    for (const row of Array.isArray(group?.monthList) ? group.monthList : []) {
-      const usageValue = toNumber(row?.pq);
-      const amount = toNumber(row?.amt);
-      const statementDate = normalizeDate(`${group?.ym || ""}01`) || normalizeDate(row?.issuDate);
-      if (!statementDate || amount === null) {
-        continue;
+  for (const row of directRows) {
+    const built = buildSgccBillRecord(account, row, {
+      sourceChannel: "95598.cn/totalbill",
+      raw: {
+        row,
+        summaryAccount: {
+          accountNo: getSgccAccountNumber(summaryAccount),
+          consName: summaryAccount?.consName,
+          elecAddress: summaryAccount?.elecAddress || summaryAccount?.elecAddr || summaryAccount?.eleAddress
+        }
       }
+    });
+    if (built) {
+      bills.push(built);
+    }
+  }
 
-      bills.push({
-        accountId: account.id,
-        statementDate,
-        periodStart: normalizeDate(row?.begDate),
-        periodEnd: normalizeDate(row?.endDate),
-        usageValue,
-        usageUnit: usageValue !== null ? "kWh" : null,
-        amount,
-        currency: "CNY",
+  for (const group of directRows) {
+    for (const row of Array.isArray(group?.monthList) ? group.monthList : []) {
+      const built = buildSgccBillRecord(account, row, {
+        ym: group?.ym,
         sourceChannel: "95598.cn/electricitySummary",
-        recordType: "bill",
-        status: "confirmed",
-        isEstimated: false,
         raw: {
           group,
           row,
           summaryAccount: {
-            consNoDst: summaryAccount?.consNoDst,
+            accountNo: getSgccAccountNumber(summaryAccount),
             consName: summaryAccount?.consName,
-            elecAddress: summaryAccount?.elecAddress
+            elecAddress: summaryAccount?.elecAddress || summaryAccount?.elecAddr || summaryAccount?.eleAddress
           }
         }
       });
+      if (built) {
+        bills.push(built);
+      }
     }
   }
 
-  return bills;
+  const deduped = new Map();
+  for (const bill of bills) {
+    const key = [
+      bill.statementDate,
+      bill.periodStart || "",
+      bill.periodEnd || "",
+      bill.amount,
+      bill.usageValue ?? ""
+    ].join("|");
+    if (!deduped.has(key)) {
+      deduped.set(key, bill);
+    }
+  }
+
+  return [...deduped.values()].sort((a, b) => String(a.statementDate).localeCompare(String(b.statementDate)));
+}
+
+function mapSgccRecentDailyUsage(chargeData = {}) {
+  const items = Array.isArray(chargeData?.sevenEleList) ? chargeData.sevenEleList : [];
+  return items
+    .map((item) => {
+      const usageDate = normalizeDate(item.day);
+      const usageValue = toNumber(item.dayElePq);
+      if (!usageDate || usageValue === null) {
+        return null;
+      }
+      return {
+        usageDate,
+        usageValue,
+        usageUnit: "kWh",
+        amount: toNumber(item.thisAmt),
+        currency: "CNY",
+        sourceChannel: "95598.cn/electricityCharge",
+        isEstimated: false,
+        peakUsage: toNumber(item.thisPPq),
+        valleyUsage: toNumber(item.thisVPq),
+        tipUsage: toNumber(item.thisTPq),
+        normalUsage: toNumber(item.thisNPq),
+        raw: item
+      };
+    })
+    .filter(Boolean);
+}
+
+function getSgccAnnualSummary(chargeData = {}) {
+  const dataInfo = chargeData?.powerData?.dataInfo;
+  if (!dataInfo || typeof dataInfo !== "object") {
+    return null;
+  }
+  return {
+    ...dataInfo,
+    totalEleNum: toNumber(dataInfo.totalEleNum) ?? dataInfo.totalEleNum ?? null,
+    totalEleCost: toNumber(dataInfo.totalEleCost) ?? dataInfo.totalEleCost ?? null,
+    year: trimText(dataInfo.year) || dataInfo.year || null
+  };
+}
+
+function mapMy95598Bills(account, myData = {}) {
+  const bills = [];
+
+  if (Array.isArray(myData?.mothEleList) && myData.mothEleList.length > 0) {
+    for (const row of myData.mothEleList) {
+      const built = buildSgccBillRecord(account, row, {
+        sourceChannel: "95598.cn/my95598",
+        raw: row
+      });
+      if (built) {
+        bills.push(built);
+      }
+    }
+  }
+
+  if (bills.length === 0 && Array.isArray(myData?.monthData) && Array.isArray(myData?.eleNum) && Array.isArray(myData?.eleCost)) {
+    for (let index = 0; index < myData.monthData.length; index += 1) {
+      const monthText = myData.monthData[index];
+      const usageValue = toNumber(myData.eleNum[index]);
+      const amount = toNumber(myData.eleCost[index]);
+      const built = buildSgccBillRecord(account, {
+        month: monthText,
+        monthEleNum: usageValue,
+        monthEleCost: amount
+      }, {
+        sourceChannel: "95598.cn/my95598",
+        raw: {
+          month: monthText,
+          usageValue,
+          amount
+        }
+      });
+      if (built) {
+        bills.push(built);
+      }
+    }
+  }
+
+  const deduped = new Map();
+  for (const bill of bills) {
+    const key = [bill.statementDate, bill.amount, bill.usageValue ?? ""].join("|");
+    if (!deduped.has(key)) {
+      deduped.set(key, bill);
+    }
+  }
+
+  return [...deduped.values()].sort((a, b) => String(a.statementDate).localeCompare(String(b.statementDate)));
+}
+
+function mergeSgccBills(...billGroups) {
+  const merged = new Map();
+  for (const group of billGroups) {
+    for (const bill of Array.isArray(group) ? group : []) {
+      const key = [
+        bill.statementDate,
+        bill.periodStart || "",
+        bill.periodEnd || "",
+        bill.amount,
+        bill.usageValue ?? ""
+      ].join("|");
+      if (!merged.has(key)) {
+        merged.set(key, bill);
+      }
+    }
+  }
+  return [...merged.values()].sort((a, b) => String(a.statementDate).localeCompare(String(b.statementDate)));
 }
 
 async function extractSgccSessionData(config, account, credentials) {
+  if (config.cdpUrl) {
+    return extractSgccSessionDataFromLiveCdp(config, account);
+  }
+
   return withBrowser(config, async ({ context, page }) => {
     await injectSessionSnapshot(page, context, config, credentials);
-    const summary = await loadSummarySnapshot(page, config);
-    const summaryAccount = pickSummaryAccount(summary?.data, account);
-    if (!summaryAccount) {
-      throw new Error("No SGCC account data was found in electricity summary page");
+    const charge = await loadChargeSnapshot(page, config, {
+      navigate: true
+    });
+    let summary = null;
+    let summaryAccount = null;
+    try {
+      summary = await loadSummarySnapshot(page, config, {
+        navigate: true
+      });
+      summaryAccount = pickSummaryAccount(summary?.data, account);
+    } catch {
+      summary = null;
+      summaryAccount = null;
     }
-
-    const charge = await loadChargeSnapshot(page, config);
+    const my95598 = await loadMy95598Snapshot(page, config, {
+      navigate: true
+    });
     return {
       summary,
       summaryAccount,
-      charge
+      charge,
+      my95598
     };
   });
 }
@@ -1254,24 +2062,30 @@ async function testSgccSessionConnection({ account, credentials }) {
     details: {
       provider: account.provider,
       utilityType: account.utilityType,
-      accountNo: extracted.summaryAccount?.consNoDst || extracted.summaryAccount?.consNo_dst || account.accountNo,
-      billGroupCount: Array.isArray(extracted.summaryAccount?.billList) ? extracted.summaryAccount.billList.length : 0,
-      dailyUsageCount: Array.isArray(extracted.charge?.data?.sevenEleList) ? extracted.charge.data.sevenEleList.length : 0,
+      accountNo:
+        getSgccAccountNumber(extracted.summaryAccount) ||
+        getSgccAccountNumber(extracted.charge?.data?.electric) ||
+        account.accountNo,
+      billGroupCount: mergeSgccBills(
+        mapSummaryBills(account, extracted.summaryAccount),
+        mapMy95598Bills(account, extracted.my95598?.data)
+      ).length,
+      dailyUsageCount: mapSgccRecentDailyUsage(extracted.charge?.data).length,
       sessionMode: true
     }
   };
 }
 
 function assertSgccSessionSnapshotForRuntime(credentials = {}) {
-  if (hasSessionSnapshot(credentials)) {
+  if (hasSessionSnapshot(credentials) || hasCdpSession(credentials)) {
     return;
   }
 
-  throw new Error("网上国网目前使用 CK 会话导入。请先在后台填写登录 Cookie（CK）；storageJson 现在是可选增强项，不需要再填写登录页 URL、详情页 URL 或选择器。");
+  throw new Error("网上国网当前使用会话导入。请先在后台填写登录 Cookie（CK）；这个字段同时支持普通 Cookie 串和完整 Cookie JSON。storageJson 仍是可选增强项。");
 }
 
 export async function testSgccZhejiangConnection({ account, credentials }) {
-  if (hasSessionSnapshot(credentials)) {
+  if (hasCdpSession(credentials) || hasSessionSnapshot(credentials)) {
     return testSgccSessionConnection({ account, credentials });
   }
   if (hasRelayCredentials(credentials, account)) {
@@ -1289,7 +2103,7 @@ export async function testSgccZhejiangConnection({ account, credentials }) {
 }
 
 export async function collectSgccZhejiangBills({ account, credentials }) {
-  if (hasSessionSnapshot(credentials)) {
+  if (hasCdpSession(credentials) || hasSessionSnapshot(credentials)) {
     const config = getPlaywrightConfig(credentials);
     let extracted;
     try {
@@ -1301,29 +2115,25 @@ export async function collectSgccZhejiangBills({ account, credentials }) {
       throw error;
     }
 
-    const bills = mapSummaryBills(account, extracted.summaryAccount);
-    const recentDailyUsage = Array.isArray(extracted.charge?.data?.sevenEleList)
-      ? extracted.charge.data.sevenEleList.map((item) => ({
-          usageDate: normalizeDate(item.day),
-          usageValue: toNumber(item.dayElePq),
-          peakUsage: toNumber(item.thisPPq),
-          valleyUsage: toNumber(item.thisVPq),
-          tipUsage: toNumber(item.thisTPq),
-          normalUsage: toNumber(item.thisNPq),
-          costAmount: toNumber(item.thisAmt),
-          raw: item
-        }))
-      : [];
+    const bills = mergeSgccBills(
+      mapSummaryBills(account, extracted.summaryAccount),
+      mapMy95598Bills(account, extracted.my95598?.data),
+      mapRelayMonthlyBills(account, extracted.charge?.data?.powerData)
+    );
+    const recentDailyUsage = mapSgccRecentDailyUsage(extracted.charge?.data);
 
     return {
       ok: true,
-      summary: `SGCC Zhejiang collected ${bills.length} monthly bill items`,
+      summary: `SGCC Zhejiang collected ${bills.length} monthly bill items and ${recentDailyUsage.length} daily usage items`,
       details: {
         provider: account.provider,
         utilityType: account.utilityType,
-        accountNo: extracted.summaryAccount?.consNoDst || extracted.summaryAccount?.consNo_dst || account.accountNo,
+        accountNo:
+          getSgccAccountNumber(extracted.summaryAccount) ||
+          getSgccAccountNumber(extracted.charge?.data?.electric) ||
+          account.accountNo,
         recentDailyUsage,
-        annualSummary: extracted.charge?.data?.powerData?.dataInfo || null,
+        annualSummary: getSgccAnnualSummary(extracted.charge?.data),
         stage: "browser-session"
       },
       bills
@@ -1352,29 +2162,25 @@ export async function collectSgccZhejiangBills({ account, credentials }) {
     throw error;
   }
 
-  const bills = mapSummaryBills(account, extracted.summaryAccount);
-  const recentDailyUsage = Array.isArray(extracted.charge?.data?.sevenEleList)
-    ? extracted.charge.data.sevenEleList.map((item) => ({
-        usageDate: normalizeDate(item.day),
-        usageValue: toNumber(item.dayElePq),
-        peakUsage: toNumber(item.thisPPq),
-        valleyUsage: toNumber(item.thisVPq),
-        tipUsage: toNumber(item.thisTPq),
-        normalUsage: toNumber(item.thisNPq),
-        costAmount: toNumber(item.thisAmt),
-        raw: item
-      }))
-    : [];
+  const bills = mergeSgccBills(
+    mapSummaryBills(account, extracted.summaryAccount),
+    mapMy95598Bills(account, extracted.my95598?.data),
+    mapRelayMonthlyBills(account, extracted.charge?.data?.powerData)
+  );
+  const recentDailyUsage = mapSgccRecentDailyUsage(extracted.charge?.data);
 
   return {
     ok: true,
-    summary: `SGCC Zhejiang collected ${bills.length} monthly bill items`,
+    summary: `SGCC Zhejiang collected ${bills.length} monthly bill items and ${recentDailyUsage.length} daily usage items`,
     details: {
       provider: account.provider,
       utilityType: account.utilityType,
-      accountNo: extracted.summaryAccount?.consNoDst || extracted.summaryAccount?.consNo_dst || account.accountNo,
+      accountNo:
+        getSgccAccountNumber(extracted.summaryAccount) ||
+        getSgccAccountNumber(extracted.charge?.data?.electric) ||
+        account.accountNo,
       recentDailyUsage,
-      annualSummary: extracted.charge?.data?.powerData?.dataInfo || null,
+      annualSummary: getSgccAnnualSummary(extracted.charge?.data),
       stage: "browser-session"
     },
     bills

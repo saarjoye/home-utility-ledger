@@ -328,7 +328,7 @@ const providerDefinitionsClean = [
         label: "登录 Cookie（CK）",
         type: "password",
         required: false,
-        helpText: "备用方式：从已登录的 95598 / 网上国网页面复制整段 Cookie。"
+        helpText: "推荐填写完整 Cookie JSON；也兼容普通整段 Cookie 串。从已登录的 95598 / 网上国网页面或浏览器 Cookie 导出结果中复制。"
       },
       {
         key: "storageJson",
@@ -427,7 +427,7 @@ if (sgccProviderDefinition) {
   }
   if (fieldMap.cookieHeader) {
     fieldMap.cookieHeader.label = "登录 Cookie（CK）";
-    fieldMap.cookieHeader.helpText = "推荐方式。从已短信登录成功的 95598 / 网上国网页面复制整段 Cookie。";
+    fieldMap.cookieHeader.helpText = "推荐方式。优先粘贴完整 Cookie JSON；也兼容普通整段 Cookie 串。完整 Cookie JSON 更容易保留 HttpOnly 登录态。";
   }
   if (fieldMap.storageJson) {
     fieldMap.storageJson.label = "浏览器存储快照（storageJson，可选增强）";

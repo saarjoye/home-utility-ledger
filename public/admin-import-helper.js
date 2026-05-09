@@ -42,6 +42,23 @@ function normalizeCookieHeader(value) {
     .trim();
 }
 
+function normalizeCookieCollection(value) {
+  if (!value) {
+    return [];
+  }
+  if (typeof value === "string") {
+    const parsed = tryParseJsonText(value);
+    return normalizeCookieCollection(parsed);
+  }
+  if (Array.isArray(value)) {
+    return value.filter((item) => item && typeof item === "object" && String(item.name || "").trim());
+  }
+  if (Array.isArray(value.cookies)) {
+    return normalizeCookieCollection(value.cookies);
+  }
+  return [];
+}
+
 function extractCookiePair(text, cookieName) {
   const match = String(text || "").match(new RegExp(`(?:^|[;\\s])(${cookieName}=([^;\\s]+))`, "i"));
   return match ? match[1] : "";
@@ -101,8 +118,8 @@ export function getImportPreset(providerDef) {
   if (key === "sgcc_zhejiang") {
     return {
       title: "国网会话导入",
-      hint: "适用于已在浏览器登录 95598 / 网上国网的场景。建议直接在账单相关页面执行提取脚本。",
-      acceptedFormats: "支持粘贴：提取脚本输出、整段 Cookie、storageJson JSON。",
+      hint: "适用于已在浏览器登录 95598 / 网上国网的场景。优先粘贴完整 Cookie JSON；只有拿不到时，再退回普通 Cookie 串。",
+      acceptedFormats: "支持粘贴：提取脚本输出、整段 Cookie、完整 Cookie JSON、storageJson JSON。",
       steps: [
         {
           title: "打开已登录页面",
@@ -117,7 +134,7 @@ export function getImportPreset(providerDef) {
         {
           title: "执行脚本并复制输出",
           visual: "复制 JSON",
-          body: "把下面的提取脚本粘进去执行。浏览器会输出一段 JSON，把整段复制后粘贴回后台即可。"
+          body: "把下面的提取脚本粘进去执行。它能导出当前页面可见的 Cookie 和 storageJson。若测试仍回登录页，说明还缺 HttpOnly Cookie，请改为从浏览器扩展或 DevTools 导出完整 Cookie JSON，再粘贴到同一个“登录 Cookie（CK）”输入框。"
         }
       ],
       snippetLabel: "国网页面提取脚本",
@@ -239,13 +256,22 @@ function parseSgccImportPayload(raw) {
   const credentials = {};
   const summaryParts = [];
 
+  const cookieCollection = normalizeCookieCollection(
+    parsed?.cookiesJson ||
+    parsed?.cookieJson ||
+    parsed?.cookies ||
+    parsed?.cookie
+  );
+  if (cookieCollection.length) {
+    credentials.cookieHeader = JSON.stringify(cookieCollection, null, 2);
+    summaryParts.push("已识别完整 Cookie JSON");
+  }
+
   const cookieHeader = normalizeCookieHeader(
     parsed?.cookieHeader ||
-    parsed?.cookies ||
-    parsed?.cookie ||
-    raw
+    (!cookieCollection.length ? parsed?.cookies || parsed?.cookie || raw : "")
   );
-  if (cookieHeader) {
+  if (!credentials.cookieHeader && cookieHeader) {
     credentials.cookieHeader = cookieHeader;
     summaryParts.push("已识别 CK");
   }
@@ -275,7 +301,7 @@ function parseSgccImportPayload(raw) {
   );
 
   if (!credentials.cookieHeader && !credentials.storageJson) {
-    throw new Error("没有识别到国网需要的 CK 或 storageJson。建议直接粘贴提取脚本输出结果。");
+    throw new Error("没有识别到国网需要的 Cookie 或 storageJson。建议直接粘贴提取脚本输出，或粘贴浏览器导出的完整 Cookie JSON。");
   }
 
   return {

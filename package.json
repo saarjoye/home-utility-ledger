@@ -10,7 +10,8 @@
     "seed": "node src/server.mjs --seed-only"
   },
   "dependencies": {
-    "playwright": "^1.55.0"
+    "playwright": "^1.55.0",
+    "ws": "^8.20.0"
   },
   "engines": {
     "node": ">=24"

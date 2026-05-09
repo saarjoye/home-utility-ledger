@@ -838,11 +838,11 @@ function applyProviderPresentation(providerDef) {
   setText("providerGuideText", form.credentialIntro || "请先选择服务商，系统会给出最小可用字段说明。");
   setText("providerGuideExtra", form.sessionGuide || "");
 
-  setText("importHelperTitle", preset.title || "会话导入辅助");
+  setText("importHelperTitle", preset.title || "接入说明");
   setText("importHelperHint", preset.hint || "请先选择服务商。");
   setText("importAcceptedFormats", preset.acceptedFormats || "");
 
-  setText("importGuideTitle", `${preset.title || "会话导入"}分步说明`);
+  setText("importGuideTitle", `${preset.title || "接入说明"}操作步骤`);
   setText("importSnippetLabel", preset.snippetLabel || "提取脚本");
   document.getElementById("importSnippetPreview").textContent = preset.snippet || "当前服务商没有页面提取脚本，请按上方说明直接粘贴导出内容。";
 

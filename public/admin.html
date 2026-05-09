@@ -154,14 +154,14 @@
 
             <div class="form-intro provider-guide import-helper">
               <strong id="importHelperTitle">会话导入辅助</strong>
-              <p id="importHelperHint">可先复制提取脚本，在对应服务商的已登录页面执行，再把输出结果粘贴到这里自动识别。</p>
+              <p id="importHelperHint">可先复制提取脚本，在已登录页面执行后，再把结果粘贴到这里自动识别。</p>
               <p id="importAcceptedFormats"></p>
               <div class="import-helper-actions">
                 <button class="btn btn-secondary" id="copyImportSnippetButton" type="button">复制提取脚本</button>
                 <button class="btn btn-primary" id="applyImportPayloadButton" type="button">识别并填入</button>
                 <button class="btn btn-secondary" id="clearImportPayloadButton" type="button">清空原始内容</button>
               </div>
-              <textarea id="importPayloadInput" rows="7" placeholder="把控制台输出、Cookie 文本、storageJson、requestPara JSON，或 HAR 文件内容粘贴到这里"></textarea>
+              <textarea id="importPayloadInput" rows="7" placeholder="把已登录页面导出的内容或抓包结果粘贴到这里，系统会自动识别"></textarea>
               <div class="form-feedback" id="importPayloadFeedback"></div>
             </div>
 

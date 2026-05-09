@@ -291,7 +291,7 @@ const providerDefinitionsClean = [
     key: "sgcc_zhejiang",
     utilityType: "electricity",
     provider: "网上国网（浙江）",
-    loginMethods: ["浏览器会话导入"],
+    loginMethods: ["浏览器登录信息导入"],
     form: {
       accountNoLabel: "用电户号（可留空）",
       accountNoPlaceholder: "如果同一账号下绑定多个用电户号，建议填写；单户号可留空",
@@ -300,23 +300,23 @@ const providerDefinitionsClean = [
       loginNameVisible: false,
       loginMethodVisible: false,
       notesPlaceholder: "可记录住址、户名或抓取来源，非必填",
-      credentialIntro: "只保留最小可用字段：登录 CK，必要时再补 storageJson。",
-      sessionGuide: "请先在本地浏览器登录 95598 / 网上国网，再把 CK 导入后台；若仅有 CK 仍进不了账单页，再补同一次会话的 storageJson。"
+      credentialIntro: "先在浏览器完成登录，再把已登录页面中的内容粘贴回来即可。",
+      sessionGuide: "通常只需要填写登录信息；只有测试未通过时，再补充页面信息。"
     },
     credentialFields: [
       {
         key: "cookieHeader",
-        label: "登录 Cookie（CK）",
+        label: "登录信息",
         type: "password",
         required: true,
-        helpText: "推荐填写完整 Cookie JSON；也兼容普通整段 Cookie 串。从已登录的 95598 / 网上国网页面或浏览器 Cookie 导出结果中复制。"
+        helpText: "从已登录页面复制即可。建议优先粘贴浏览器导出的完整登录信息。"
       },
       {
         key: "storageJson",
-        label: "浏览器存储快照（storageJson，可选增强）",
+        label: "补充页面信息（可选）",
         type: "password",
         required: false,
-        helpText: "仅在使用 CK 会话导入，且 CK 单独无法进入账单页时，再补充 localStorage / sessionStorage 快照。"
+        helpText: "只有登录信息单独无法通过测试时，再补这一项。"
       }
     ]
   },
@@ -324,7 +324,7 @@ const providerDefinitionsClean = [
     key: "hzwater_online",
     utilityType: "water",
     provider: "杭州市水务集团网上营业厅",
-    loginMethods: ["Token 导入"],
+    loginMethods: ["浏览器登录信息导入"],
     form: {
       accountNoLabel: "水表号 / 户号（可留空）",
       accountNoPlaceholder: "通常可留空；测试成功后系统会自动识别水表号",
@@ -333,23 +333,23 @@ const providerDefinitionsClean = [
       loginNameVisible: false,
       loginMethodVisible: false,
       notesPlaceholder: "可记录开户地址、户名或补充说明，非必填",
-      credentialIntro: "当前最稳的接入方式是填写 waterUserToken；如已知道水表号，可一并填写以加快匹配。",
-      sessionGuide: "杭水网页虽然支持短信验证码登录，但真正采集依赖登录后的 waterUserToken。纯服务器容器无法直接读取你浏览器里的 localStorage，所以不适合做无人工参与的短信自动登录。"
+      credentialIntro: "先在杭水页面完成登录，再把已登录页面中的内容粘贴回来即可。",
+      sessionGuide: "通常只需要填写登录信息；知道水表号的话，也可以顺手填上。"
     },
     credentialFields: [
       {
         key: "sessionToken",
-        label: "waterUserToken",
+        label: "登录信息",
         type: "password",
         required: true,
-        helpText: "从已登录杭水网页的 localStorage 中提取 waterUserToken。"
+        helpText: "从已登录页面复制即可。"
       },
       {
         key: "meterNumber",
-        label: "水表号（可留空）",
+        label: "水表号（可选）",
         type: "text",
         required: false,
-        helpText: "留空时会先请求当前账号的水表列表并自动选取。"
+        helpText: "不填也可以，系统会尽量自动识别。"
       }
     ]
   },
@@ -357,25 +357,25 @@ const providerDefinitionsClean = [
     key: "hzgas_servicehall",
     utilityType: "gas",
     provider: "杭州天然气公众号服务",
-    loginMethods: ["CK 会话导入"],
+    loginMethods: ["登录信息导入"],
     form: {
-      accountNoLabel: "燃气户号 / userNo",
+      accountNoLabel: "燃气户号",
       accountNoPlaceholder: "例如 0099162500",
       accountNoRequired: true,
       accountNoVisible: true,
       loginNameVisible: false,
       loginMethodVisible: false,
       notesPlaceholder: "可记录开户地址或站点信息，非必填",
-      credentialIntro: "当前最稳的接入方式是填写公众号会话 CK + 燃气户号 / userNo。",
-      sessionGuide: "燃气查询页面依赖微信公众号环境，服务器容器无法直接完成公众号内登录。"
+      credentialIntro: "先在查询页面完成登录，再填写登录信息和燃气户号。",
+      sessionGuide: "燃气查询依赖公众号页面环境，建议直接从已登录页面或抓包结果导入。"
     },
     credentialFields: [
       {
         key: "cookieHeader",
-        label: "登录 Cookie（CK）",
+        label: "登录信息",
         type: "password",
         required: true,
-        helpText: "从已登录的公众号 H5 请求里复制 `logged_in_user=...` 这一段会话 Cookie。"
+        helpText: "从已登录页面复制即可。"
       }
     ]
   }
@@ -384,14 +384,14 @@ const providerDefinitionsClean = [
 const sgccProviderDefinition = providerDefinitionsClean.find((item) => item.key === "sgcc_zhejiang");
 if (sgccProviderDefinition) {
   sgccProviderDefinition.provider = "网上国网（浙江）";
-  sgccProviderDefinition.loginMethods = ["短信登录后的 CK 会话导入"];
+  sgccProviderDefinition.loginMethods = ["短信登录后的登录信息导入"];
   sgccProviderDefinition.form = {
     ...sgccProviderDefinition.form,
     accountNoLabel: "用电户号（可留空）",
     accountNoPlaceholder: "如果同一账号下绑定多个用电户号，建议填写；单户号可留空",
     notesPlaceholder: "可记录住址、户名或抓取来源，非必填",
-    credentialIntro: "当前推荐方式就是短信登录后的浏览器 CK 会话导入。",
-    sessionGuide: "请先在本地浏览器登录 95598 / 网上国网，再把 CK 导入后台；若仅有 CK 仍进不了账单页，再补同一次会话的 storageJson。"
+    credentialIntro: "推荐先在浏览器完成短信登录，再把已登录页面中的内容粘贴到这里。",
+    sessionGuide: "一般先填登录信息即可；如果测试没有通过，再补页面信息。"
   };
 
   const fieldMap = Object.fromEntries(
@@ -399,12 +399,12 @@ if (sgccProviderDefinition) {
   );
 
   if (fieldMap.cookieHeader) {
-    fieldMap.cookieHeader.label = "登录 Cookie（CK）";
-    fieldMap.cookieHeader.helpText = "推荐方式。优先粘贴完整 Cookie JSON；也兼容普通整段 Cookie 串。完整 Cookie JSON 更容易保留 HttpOnly 登录态。";
+    fieldMap.cookieHeader.label = "登录信息";
+    fieldMap.cookieHeader.helpText = "推荐直接粘贴浏览器导出的完整登录信息。";
   }
   if (fieldMap.storageJson) {
-    fieldMap.storageJson.label = "浏览器存储快照（storageJson，可选增强）";
-    fieldMap.storageJson.helpText = "仅在使用 CK 会话导入，且 CK 单独无法进入账单页时，再补充 localStorage / sessionStorage 快照。";
+    fieldMap.storageJson.label = "补充页面信息（可选）";
+    fieldMap.storageJson.helpText = "只有在登录信息单独无法通过测试时，再补这一项。";
   }
 }
 
@@ -827,28 +827,6 @@ async function routeApi(req, res, url) {
 
     if (req.method === "GET" && url.pathname === "/api/admin/providers") {
       return sendJson(res, 200, { items: providerDefinitionsClean }, { "Cache-Control": "no-store" });
-
-      const items = providerDefinitionsForAdminUi.map((item) => {
-        if (item.key !== "sgcc_zhejiang") {
-          return item;
-        }
-
-        return {
-          ...item,
-          credentialFields: item.credentialFields.map((field) => {
-            if (field.key !== "storageJson") {
-              return field;
-            }
-            return {
-              ...field,
-              label: "浏览器存储快照（storageJson，可选增强项）",
-              required: false
-            };
-          })
-        };
-      });
-
-      return sendJson(res, 200, { items }, { "Cache-Control": "no-store" });
     }
 
     if (req.method === "GET" && url.pathname === "/api/admin/accounts") {

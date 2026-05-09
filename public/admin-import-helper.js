@@ -118,8 +118,8 @@ export function getImportPreset(providerDef) {
   if (key === "sgcc_zhejiang") {
     return {
       title: "国网会话导入",
-      hint: "适用于已在浏览器登录 95598 / 网上国网的场景。优先粘贴完整 Cookie JSON；只有拿不到时，再退回普通 Cookie 串。",
-      acceptedFormats: "支持粘贴：提取脚本输出、整段 Cookie、完整 Cookie JSON、storageJson JSON。",
+      hint: "适用于已在浏览器登录 95598 / 网上国网的场景。优先粘贴浏览器导出的完整登录信息；只有拿不到时，再退回页面提取结果。",
+      acceptedFormats: "支持粘贴：页面提取结果、完整登录信息、页面补充信息。",
       steps: [
         {
           title: "打开已登录页面",
@@ -134,7 +134,7 @@ export function getImportPreset(providerDef) {
         {
           title: "执行脚本并复制输出",
           visual: "复制 JSON",
-          body: "把下面的提取脚本粘进去执行。它能导出当前页面可见的 Cookie 和 storageJson。若测试仍回登录页，说明还缺 HttpOnly Cookie，请改为从浏览器扩展或 DevTools 导出完整 Cookie JSON，再粘贴到同一个“登录 Cookie（CK）”输入框。"
+          body: "把下面的提取脚本粘进去执行。若测试仍回登录页，说明页面里拿到的信息还不完整，这时请改用浏览器导出的完整登录信息。"
         }
       ],
       snippetLabel: "国网页面提取脚本",
@@ -169,8 +169,8 @@ export function getImportPreset(providerDef) {
   if (key === "hzwater_online") {
     return {
       title: "杭水会话导入",
-      hint: "适用于已在杭水网上营业厅登录的场景。当前真正关键的是 `waterUserToken`。",
-      acceptedFormats: "支持粘贴：提取脚本输出、包含 token 的 requestPara JSON、仅 token 文本。",
+      hint: "适用于已在杭水网上营业厅登录的场景。优先粘贴已登录页面导出的内容，系统会自动识别所需信息。",
+      acceptedFormats: "支持粘贴：页面提取结果、请求内容、单独的登录信息文本。",
       steps: [
         {
           title: "打开已登录杭水页面",
@@ -180,12 +180,12 @@ export function getImportPreset(providerDef) {
         {
           title: "进入控制台执行脚本",
           visual: "F12 / Console",
-          body: "按 F12，切到 Console（控制台），执行下面脚本。它会读取 localStorage 里的 `waterUserToken`。"
+          body: "按 F12，切到 Console（控制台），执行下面脚本。"
         },
         {
           title: "回粘结果",
-          visual: "waterUserToken",
-          body: "复制脚本输出的 JSON，回到后台粘贴。系统会自动识别 `waterUserToken`，能识别到水表号时也会一起带上。"
+          visual: "复制结果",
+          body: "复制脚本输出的内容，回到后台粘贴。系统会自动识别登录信息，能识别到水表号时也会一起带上。"
         }
       ],
       snippetLabel: "杭水页面提取脚本",
@@ -217,8 +217,8 @@ export function getImportPreset(providerDef) {
   if (key === "hzgas_servicehall") {
     return {
       title: "燃气会话导入",
-      hint: "燃气更适合直接粘贴 HAR、Cookie 或 userNo。因为查询过程依赖微信公众号环境，不建议承诺浏览器脚本一键提取。",
-      acceptedFormats: "支持粘贴：HAR 文件 JSON、`logged_in_user=...` Cookie、`userNo=...` 文本。",
+      hint: "燃气更适合直接粘贴抓包结果或已登录页面导出的内容，因为查询过程依赖公众号页面环境。",
+      acceptedFormats: "支持粘贴：抓包文件、登录信息、燃气户号文本。",
       steps: [
         {
           title: "优先准备 HAR 或抓包结果",
@@ -227,13 +227,13 @@ export function getImportPreset(providerDef) {
         },
         {
           title: "或者粘贴 CK + userNo",
-          visual: "Cookie / userNo",
-          body: "如果你已经单独拿到了 `logged_in_user=...` Cookie 和燃气户号 `userNo`，也可以直接粘贴原始文本。"
+          visual: "登录信息 / 户号",
+          body: "如果你已经单独拿到了登录信息和燃气户号，也可以直接粘贴原始文本。"
         },
         {
           title: "自动识别并回填",
           visual: "自动拆字段",
-          body: "系统会优先识别 `logged_in_user` 和 `userNo`。识别不到时会明确告诉你缺的是 CK 还是 userNo。"
+          body: "系统会自动识别登录信息和燃气户号。识别不到时会明确告诉你还缺哪一项。"
         }
       ],
       snippetLabel: "燃气导入说明",
@@ -264,7 +264,7 @@ function parseSgccImportPayload(raw) {
   );
   if (cookieCollection.length) {
     credentials.cookieHeader = JSON.stringify(cookieCollection, null, 2);
-    summaryParts.push("已识别完整 Cookie JSON");
+    summaryParts.push("已识别完整登录信息");
   }
 
   const cookieHeader = normalizeCookieHeader(
@@ -273,7 +273,7 @@ function parseSgccImportPayload(raw) {
   );
   if (!credentials.cookieHeader && cookieHeader) {
     credentials.cookieHeader = cookieHeader;
-    summaryParts.push("已识别 CK");
+    summaryParts.push("已识别登录信息");
   }
 
   const storageSnapshot = normalizeStorageSnapshot(
@@ -288,7 +288,7 @@ function parseSgccImportPayload(raw) {
   );
   if (storageSnapshot) {
     credentials.storageJson = JSON.stringify(storageSnapshot, null, 2);
-    summaryParts.push("已识别 storageJson");
+    summaryParts.push("已识别补充页面信息");
   }
 
   const accountNo = firstNonEmpty(
@@ -301,7 +301,7 @@ function parseSgccImportPayload(raw) {
   );
 
   if (!credentials.cookieHeader && !credentials.storageJson) {
-    throw new Error("没有识别到国网需要的 Cookie 或 storageJson。建议直接粘贴提取脚本输出，或粘贴浏览器导出的完整 Cookie JSON。");
+    throw new Error("没有识别到国网可用的登录信息。建议直接粘贴页面提取结果，或粘贴浏览器导出的完整登录信息。");
   }
 
   return {
@@ -340,10 +340,10 @@ function parseWaterImportPayload(raw) {
 
   if (!token && /^[A-Za-z0-9_\-]{30,}$/.test(String(raw).trim())) {
     credentials.sessionToken = String(raw).trim();
-    summaryParts.push("已识别 waterUserToken");
+    summaryParts.push("已识别登录信息");
   } else if (token) {
     credentials.sessionToken = token;
-    summaryParts.push("已识别 waterUserToken");
+    summaryParts.push("已识别登录信息");
   }
 
   if (meterNumber) {
@@ -352,7 +352,7 @@ function parseWaterImportPayload(raw) {
   }
 
   if (!credentials.sessionToken) {
-    throw new Error("没有识别到杭水所需的 waterUserToken。建议直接粘贴提取脚本输出，或粘贴包含 token 的 requestPara JSON。");
+    throw new Error("没有识别到杭水可用的登录信息。建议直接粘贴页面提取结果，或粘贴请求里的登录信息。");
   }
 
   return {
@@ -395,10 +395,10 @@ function parseGasHarPayload(entries) {
   }
 
   if (cookieHeader) {
-    summaryParts.push("已从 HAR 识别燃气 CK");
+    summaryParts.push("已从抓包结果识别登录信息");
   }
   if (accountNo) {
-    summaryParts.push("已从 HAR 识别 userNo");
+    summaryParts.push("已从抓包结果识别燃气户号");
   }
 
   return {
@@ -423,7 +423,7 @@ function parseGasImportPayload(raw) {
     credentials.cookieHeader = cookieHeader.includes("logged_in_user=")
       ? extractCookiePair(cookieHeader, "logged_in_user") || cookieHeader
       : cookieHeader;
-    summaryParts.push("已识别燃气 CK");
+    summaryParts.push("已识别登录信息");
   }
 
   let accountNo = firstNonEmpty(
@@ -446,19 +446,19 @@ function parseGasImportPayload(raw) {
   }
 
   if (!credentials.cookieHeader && !accountNo) {
-    throw new Error("没有识别到燃气 CK 或 userNo。可直接粘贴 HAR 文件全文，或粘贴 `logged_in_user=...` 与 `userNo`。");
+    throw new Error("没有识别到燃气可用的登录信息或燃气户号。可直接粘贴抓包文件全文，或粘贴登录信息与燃气户号。");
   }
   if (!credentials.cookieHeader) {
-    throw new Error("已识别到燃气户号，但没有识别到登录 CK。");
+    throw new Error("已识别到燃气户号，但没有识别到登录信息。");
   }
   if (!accountNo) {
-    throw new Error("已识别到燃气 CK，但没有识别到 userNo。请补充燃气户号 / userNo，或粘贴包含账单查询的 HAR。");
+    throw new Error("已识别到登录信息，但没有识别到燃气户号。请补充燃气户号，或粘贴包含账单查询的抓包结果。");
   }
 
   return {
     accountNo,
     credentials,
-    summary: summaryParts.length ? summaryParts.join("，") : "已识别燃气 CK 和 userNo"
+    summary: summaryParts.length ? summaryParts.join("，") : "已识别登录信息和燃气户号"
   };
 }
 

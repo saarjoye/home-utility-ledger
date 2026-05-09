@@ -119,7 +119,7 @@ function renderMetrics() {
     {
       label: "已配置凭据",
       value: String(state.accounts.filter((item) => item.credentialConfigured).length),
-      hint: "已加密保存 CK / Token / 会话信息"
+      hint: "已加密保存登录信息"
     },
     {
       label: "活跃任务",
@@ -441,7 +441,7 @@ async function submitAccountForm() {
       await loadAccountIntoForm(result.item.id, {
         preserveFeedback: false,
         feedbackClass: "is-success",
-        feedbackMessage: "账号已保存。已保存的 CK / Token / storageJson 不会回显，留空也不会丢失；现在可以直接点“测试连接”。"
+        feedbackMessage: "账号已保存。已保存的登录信息不会回显，留空也不会丢失；现在可以直接点“测试连接”。"
       });
     } else {
       setFeedback(feedback, "is-success", "账号已保存。");
@@ -543,7 +543,7 @@ function fillAccountForm(account, options = {}) {
   document.getElementById("isPrimaryInput").checked = Boolean(account?.isPrimary);
   document.getElementById("clearCredentialsInput").checked = false;
   setText("accountFormTitle", `编辑账号：${account?.name || "--"}`);
-  setText("accountFormHint", "已保存的 CK、Token、storageJson 不会回显，这是正常的安全行为；留空不会覆盖原值，重新填写才会更新。");
+  setText("accountFormHint", "已保存的登录信息不会回显，这是正常的安全行为；留空不会覆盖原值，重新填写才会更新。");
   setText("credentialStateChip", `凭据状态：${account?.credentialConfigured ? "已配置" : "未配置"}`);
   clearImportPayload({ keepText: true, keepFeedback: false });
   if (!options.preserveFeedback) {
@@ -683,16 +683,16 @@ async function copyImportSnippetForCurrentProvider() {
   const feedback = document.getElementById("importPayloadFeedback");
 
   if (!preset.snippet) {
-    setFeedback(feedback, "is-error", "当前服务商没有可复制的浏览器提取脚本。请直接粘贴 HAR、Cookie 或原始 JSON。");
+    setFeedback(feedback, "is-error", "当前服务商没有可复制的页面提取脚本，请直接粘贴导出内容。");
     return;
   }
 
   try {
     await navigator.clipboard.writeText(preset.snippet);
-    setFeedback(feedback, "is-success", "提取脚本已复制。到对应服务商的已登录页面打开控制台执行，然后把输出结果粘贴回来。");
+    setFeedback(feedback, "is-success", "提取脚本已复制。到对应页面执行后，把结果粘贴回来即可。");
   } catch {
     document.getElementById("importPayloadInput").value = preset.snippet;
-    setFeedback(feedback, "is-success", "浏览器剪贴板不可用，已把提取脚本放进文本框。你可以手动复制后到对应页面执行。");
+    setFeedback(feedback, "is-success", "浏览器剪贴板不可用，脚本已放入文本框。手动复制后到对应页面执行即可。");
   }
 }
 
@@ -844,7 +844,7 @@ function applyProviderPresentation(providerDef) {
 
   setText("importGuideTitle", `${preset.title || "会话导入"}分步说明`);
   setText("importSnippetLabel", preset.snippetLabel || "提取脚本");
-  document.getElementById("importSnippetPreview").textContent = preset.snippet || "当前服务商没有浏览器提取脚本。请按上方说明直接粘贴 HAR、Cookie 或原始 JSON。";
+  document.getElementById("importSnippetPreview").textContent = preset.snippet || "当前服务商没有页面提取脚本，请按上方说明直接粘贴导出内容。";
 
   if (copyButton) {
     copyButton.disabled = !preset.snippet;

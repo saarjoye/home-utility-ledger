@@ -803,6 +803,7 @@ function applyProviderPresentation(providerDef) {
   const preset = getImportPreset(providerDef);
   const accountNoField = document.getElementById("accountNoField");
   const loginNameField = document.getElementById("loginNameField");
+  const loginMethodField = document.getElementById("loginMethodField");
   const notesInput = document.getElementById("accountNotesInput");
   const accountNoLabel = accountNoField?.querySelector("span");
   const loginNameLabel = loginNameField?.querySelector("span");
@@ -813,6 +814,9 @@ function applyProviderPresentation(providerDef) {
   if (accountNoLabel) {
     accountNoLabel.textContent = form.accountNoLabel || "账户标识";
   }
+  if (accountNoField) {
+    accountNoField.style.display = form.accountNoVisible === false ? "none" : "";
+  }
   if (accountNoInput) {
     accountNoInput.placeholder = form.accountNoPlaceholder || "按当前服务商要求填写";
     accountNoInput.required = Boolean(form.accountNoRequired);
@@ -822,6 +826,9 @@ function applyProviderPresentation(providerDef) {
   }
   if (loginNameField) {
     loginNameField.style.display = form.loginNameVisible === false ? "none" : "";
+  }
+  if (loginMethodField) {
+    loginMethodField.style.display = form.loginMethodVisible === false ? "none" : "";
   }
   if (notesInput) {
     notesInput.placeholder = form.notesPlaceholder || "记录补充说明";

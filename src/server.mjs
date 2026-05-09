@@ -291,43 +291,24 @@ const providerDefinitionsClean = [
     key: "sgcc_zhejiang",
     utilityType: "electricity",
     provider: "网上国网（浙江）",
-    loginMethods: ["账号密码自动采集", "浏览器会话导入"],
+    loginMethods: ["浏览器会话导入"],
     form: {
       accountNoLabel: "用电户号（可留空）",
       accountNoPlaceholder: "如果同一账号下绑定多个用电户号，建议填写；单户号可留空",
       accountNoRequired: false,
+      accountNoVisible: true,
       loginNameVisible: false,
+      loginMethodVisible: false,
       notesPlaceholder: "可记录住址、户名或抓取来源，非必填",
-      credentialIntro: "当前支持两种方式：1. 账号密码自动采集；2. 浏览器 CK 会话导入作为备用兜底。",
-      sessionGuide: "账号密码模式当前参考社区成熟方案，链路中涉及第三方中转服务做加密/解密与风控初始化；如果你介意凭据外发，请改用浏览器 CK 会话导入模式。"
+      credentialIntro: "只保留最小可用字段：登录 CK，必要时再补 storageJson。",
+      sessionGuide: "请先在本地浏览器登录 95598 / 网上国网，再把 CK 导入后台；若仅有 CK 仍进不了账单页，再补同一次会话的 storageJson。"
     },
     credentialFields: [
-      {
-        key: "username",
-        label: "网上国网账号",
-        type: "text",
-        required: false,
-        helpText: "填写后将优先走账号密码自动采集链路。"
-      },
-      {
-        key: "password",
-        label: "网上国网密码",
-        type: "password",
-        required: false,
-        helpText: "与网上国网账号配套使用；如果填写了账号和密码，系统会优先尝试自动登录。"
-      },
-      {
-        key: "relayBaseUrl",
-        label: "中转服务地址（可留空）",
-        type: "text",
-        required: false,
-        helpText: "默认使用社区方案里的中转服务地址；只有你自建了兼容服务时才需要改这里。"
-      },
       {
         key: "cookieHeader",
         label: "登录 Cookie（CK）",
         type: "password",
-        required: false,
+        required: true,
         helpText: "推荐填写完整 Cookie JSON；也兼容普通整段 Cookie 串。从已登录的 95598 / 网上国网页面或浏览器 Cookie 导出结果中复制。"
       },
       {
@@ -348,7 +329,9 @@ const providerDefinitionsClean = [
       accountNoLabel: "水表号 / 户号（可留空）",
       accountNoPlaceholder: "通常可留空；测试成功后系统会自动识别水表号",
       accountNoRequired: false,
+      accountNoVisible: false,
       loginNameVisible: false,
+      loginMethodVisible: false,
       notesPlaceholder: "可记录开户地址、户名或补充说明，非必填",
       credentialIntro: "当前最稳的接入方式是填写 waterUserToken；如已知道水表号，可一并填写以加快匹配。",
       sessionGuide: "杭水网页虽然支持短信验证码登录，但真正采集依赖登录后的 waterUserToken。纯服务器容器无法直接读取你浏览器里的 localStorage，所以不适合做无人工参与的短信自动登录。"
@@ -379,7 +362,9 @@ const providerDefinitionsClean = [
       accountNoLabel: "燃气户号 / userNo",
       accountNoPlaceholder: "例如 0099162500",
       accountNoRequired: true,
+      accountNoVisible: true,
       loginNameVisible: false,
+      loginMethodVisible: false,
       notesPlaceholder: "可记录开户地址或站点信息，非必填",
       credentialIntro: "当前最稳的接入方式是填写公众号会话 CK + 燃气户号 / userNo。",
       sessionGuide: "燃气查询页面依赖微信公众号环境，服务器容器无法直接完成公众号内登录。"
@@ -399,32 +384,20 @@ const providerDefinitionsClean = [
 const sgccProviderDefinition = providerDefinitionsClean.find((item) => item.key === "sgcc_zhejiang");
 if (sgccProviderDefinition) {
   sgccProviderDefinition.provider = "网上国网（浙江）";
-  sgccProviderDefinition.loginMethods = ["短信登录后的 CK 会话导入", "账号密码实验模式"];
+  sgccProviderDefinition.loginMethods = ["短信登录后的 CK 会话导入"];
   sgccProviderDefinition.form = {
     ...sgccProviderDefinition.form,
     accountNoLabel: "用电户号（可留空）",
     accountNoPlaceholder: "如果同一账号下绑定多个用电户号，建议填写；单户号可留空",
     notesPlaceholder: "可记录住址、户名或抓取来源，非必填",
-    credentialIntro: "当前推荐使用短信验证码登录后的浏览器 CK 会话导入。账号密码方式仅保留为实验备用，不建议作为主流程。",
-    sessionGuide: "请先在本地浏览器登录 95598 / 网上国网，再把 CK 导入后台；若仅有 CK 仍进不了账单页，再补同一次会话的 storageJson。账号密码实验模式可能返回 GB002、风控或中转链路异常。"
+    credentialIntro: "当前推荐方式就是短信登录后的浏览器 CK 会话导入。",
+    sessionGuide: "请先在本地浏览器登录 95598 / 网上国网，再把 CK 导入后台；若仅有 CK 仍进不了账单页，再补同一次会话的 storageJson。"
   };
 
   const fieldMap = Object.fromEntries(
     (sgccProviderDefinition.credentialFields || []).map((field) => [field.key, field])
   );
 
-  if (fieldMap.username) {
-    fieldMap.username.label = "网上国网账号";
-    fieldMap.username.helpText = "实验备用字段。只有在你明确要测试账号密码链路时再填写；如果同时填写了 CK，系统会优先使用 CK。";
-  }
-  if (fieldMap.password) {
-    fieldMap.password.label = "网上国网密码";
-    fieldMap.password.helpText = "与网上国网账号配套使用。官网当前多数情况下会要求短信验证码，因此这条链路不保证可用。";
-  }
-  if (fieldMap.relayBaseUrl) {
-    fieldMap.relayBaseUrl.label = "中转服务地址（可留空）";
-    fieldMap.relayBaseUrl.helpText = "默认使用社区方案里的中转服务地址；只有你自建了兼容服务时才需要修改。";
-  }
   if (fieldMap.cookieHeader) {
     fieldMap.cookieHeader.label = "登录 Cookie（CK）";
     fieldMap.cookieHeader.helpText = "推荐方式。优先粘贴完整 Cookie JSON；也兼容普通整段 Cookie 串。完整 Cookie JSON 更容易保留 HttpOnly 登录态。";

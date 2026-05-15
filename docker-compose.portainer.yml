@@ -1,6 +1,6 @@
 services:
   home-utility-ledger:
-    image: ghcr.io/saarjoye/home-utility-ledger:latest
+    image: ghcr.io/saarjoye/home-utility-ledger-standalone:latest
     container_name: home-utility-ledger
     restart: unless-stopped
     ports:

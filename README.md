@@ -35,7 +35,13 @@ admin / 你在 compose 中设置的 ADMIN_PASSWORD
 
 ## Portainer Stack
 
-如果你已经发布了 GHCR 镜像，把 `docker-compose.portainer.yml` 里的镜像名改成实际地址后粘贴到 Portainer。
+如果你已经发布了 GHCR 镜像，可以直接使用 `docker-compose.portainer.yml`。
+
+镜像：
+
+```text
+ghcr.io/saarjoye/home-utility-ledger-standalone:latest
+```
 
 持久化目录：
 

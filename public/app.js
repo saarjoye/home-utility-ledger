@@ -60,7 +60,7 @@ async function initDashboard() {
   ].join("");
   document.querySelector("#sideStatus").innerHTML = data.accounts.map(item => `${item.provider_name}：${statusText(item)}`).join("<br>");
   document.querySelector("#accountStatus").innerHTML = data.accounts.map(item => `<div><span class="status-dot ${item.status === "ok" ? "ok" : item.configured ? "warn" : ""}"></span>${item.provider_name}：${statusText(item)}</div>`).join("");
-  document.querySelector("#recentBills").innerHTML = (data.recentBills || []).map(item => `<div class="list-row"><div><b>${names[item.utility_type]}</b><div class="sub">${item.statement_date} ${item.usage_value || ""}${item.usage_unit || ""}</div></div><b>${money(item.amount)}</b></div>`).join("") || `<p class="helper">暂无账单，先到后台完成接入。</p>`;
+  renderBillGroups(data.billsByType || {});
   const monthly = {};
   for (const item of data.recentBills || []) {
     const key = String(item.statement_date || "").slice(0, 7);
@@ -73,6 +73,27 @@ async function initDashboard() {
     }
     location.reload();
   };
+}
+
+function renderBillGroups(groups) {
+  const root = document.querySelector("#recentBills");
+  if (!root) return;
+  const order = ["electricity", "water", "gas"];
+  const html = order.map(type => {
+    const rows = groups[type] || [];
+    const body = rows.map(item => `<div class="bill-row">
+      <div>
+        <b>${item.statement_date}</b>
+        <div class="sub">${Number(item.usage_value || 0).toFixed(2)} ${item.usage_unit || units[type]}</div>
+      </div>
+      <b>${money(item.amount)}</b>
+    </div>`).join("") || `<p class="helper">暂无${names[type]}账单</p>`;
+    return `<section class="bill-group ${type}">
+      <div class="bill-group-head"><h3>${names[type]}</h3><span>${rows.length} 条</span></div>
+      ${body}
+    </section>`;
+  }).join("");
+  root.innerHTML = html;
 }
 
 function card(type, item = {}) {

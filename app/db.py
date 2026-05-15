@@ -462,14 +462,29 @@ def overview(conn: sqlite3.Connection) -> dict:
         LIMIT 12
         """
     ).fetchall()
+    bills_by_type = conn.execute(
+        """
+        SELECT * FROM (
+          SELECT *,
+                 ROW_NUMBER() OVER (PARTITION BY utility_type ORDER BY statement_date DESC, id DESC) rn
+          FROM bills
+        )
+        WHERE rn <= 12
+        ORDER BY utility_type, statement_date DESC, id DESC
+        """
+    ).fetchall()
     daily = conn.execute(
         "SELECT * FROM daily_usage ORDER BY usage_date DESC LIMIT 14"
     ).fetchall()
+    grouped_bills = {"electricity": [], "water": [], "gas": []}
+    for row in bills_by_type:
+        grouped_bills.setdefault(row["utility_type"], []).append(dict(row))
     return {
         "accounts": accounts,
         "summary": current_by_type,
         "latestSummary": latest_by_type,
         "recentBills": [dict(row) for row in recent],
+        "billsByType": grouped_bills,
         "dailyUsage": [dict(row) for row in daily],
     }
 

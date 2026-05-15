@@ -114,6 +114,15 @@ select {
   font-weight: 900;
 }
 
+.brand small {
+  display: block;
+  margin-top: 4px;
+  color: #93c5fd;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .nav {
   display: grid;
   gap: 8px;

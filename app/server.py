@@ -151,6 +151,12 @@ class Handler(BaseHTTPRequestHandler):
         path = parsed.path
         if path == "/":
             return self.redirect("/index.html")
+        if path == "/admin":
+            return self.redirect("/admin.html")
+        if path == "/analytics":
+            return self.redirect("/analytics.html")
+        if path == "/healthz":
+            return self.json(200, {"ok": True, "app": "home-utility-ledger-standalone", "version": "standalone-2026.05.15.3"})
         if path == "/api/me":
             return self.json(200, {"ok": True, "authenticated": self.authed()})
         if path == "/login.html":

@@ -10,11 +10,7 @@ WORKDIR /app
 COPY app ./app
 COPY public ./public
 
-RUN useradd -r -u 10001 appuser \
-    && mkdir -p /data \
-    && chown -R appuser:appuser /app /data
-
-USER appuser
+RUN mkdir -p /data
 
 EXPOSE 3000
 

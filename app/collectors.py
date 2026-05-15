@@ -170,6 +170,7 @@ def import_sgcc_state(text) -> dict:
     getter_hits = value.get("getterHits") if isinstance(value, dict) else None
     if not isinstance(getter_hits, dict):
         raise ValueError("未识别到国网登录状态，请在国网页面执行导出脚本后粘贴完整内容")
+    merge_sgcc_request_templates(getter_hits, value)
     user_info = (getter_hits.get("getUserInfo") or [{}])[0]
     power_user = (user_info.get("powerUserList") or [{}])[0]
     payload = {
@@ -183,6 +184,64 @@ def import_sgcc_state(text) -> dict:
     if missing:
         raise ValueError(f"国网登录状态缺少必要字段：{', '.join(missing)}")
     return payload
+
+
+def merge_sgcc_request_templates(getter_hits: dict, source: dict) -> None:
+    existing = getter_hits.get("getRequestParams")
+    if not isinstance(existing, list):
+        existing = []
+    found_codes = {
+        str((((item or {}).get("requestBody") if isinstance(item, dict) else None) or item or {}).get("params4") or "")
+        for item in existing
+        if isinstance(item, dict)
+    }
+    missing_codes = {"010102", "010103"} - found_codes
+    if not missing_codes:
+        getter_hits["getRequestParams"] = existing
+        return
+    templates = []
+    for template in deep_find_sgcc_templates(source):
+        code = str(template.get("params4") or "")
+        if code in missing_codes:
+            templates.append({"requestBody": template})
+            missing_codes.remove(code)
+        if not missing_codes:
+            break
+    getter_hits["getRequestParams"] = existing + templates
+
+
+def deep_find_sgcc_templates(source):
+    seen = set()
+    out = []
+
+    def walk(value, depth=0):
+        if depth > 12 or len(out) > 20:
+            return
+        if isinstance(value, str):
+            stripped = value.strip()
+            if stripped.startswith("{") or stripped.startswith("["):
+                parsed = load_json_text(stripped)
+                if parsed is not None:
+                    walk(parsed, depth + 1)
+            return
+        if isinstance(value, list):
+            for item in value:
+                walk(item, depth + 1)
+            return
+        if not isinstance(value, dict):
+            return
+        body = value.get("requestBody") if isinstance(value.get("requestBody"), dict) else value
+        code = str(body.get("params4") or "") if isinstance(body, dict) else ""
+        if code in {"010102", "010103"}:
+            key = code + ":" + json.dumps(body, ensure_ascii=False, sort_keys=True)[:500]
+            if key not in seen:
+                seen.add(key)
+                out.append(body)
+        for item in value.values():
+            walk(item, depth + 1)
+
+    walk(source)
+    return out
 
 
 def sgcc_auth(payload: dict) -> dict:

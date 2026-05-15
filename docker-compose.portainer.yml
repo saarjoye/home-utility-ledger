@@ -1,9 +1,6 @@
 services:
   home-utility-ledger:
-    image: home-utility-ledger:local
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/saarjoye/home-utility-ledger:latest
     container_name: home-utility-ledger
     restart: unless-stopped
     ports:

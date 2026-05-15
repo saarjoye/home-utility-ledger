@@ -1,33 +1,21 @@
-FROM node:24-bookworm-slim
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    APP_DATA_DIR=/data \
+    PORT=3000
 
 WORKDIR /app
 
-ENV NODE_ENV=production
-ENV HOST=0.0.0.0
-ENV PORT=3000
-ENV APP_ENTRY=src/server.mjs
-ENV DB_PATH=data/app.db
-ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+COPY app ./app
+COPY public ./public
 
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends gosu ca-certificates git \
-  && rm -rf /var/lib/apt/lists/*
+RUN useradd -r -u 10001 appuser \
+    && mkdir -p /data \
+    && chown -R appuser:appuser /app /data
 
-COPY package.json ./
-RUN npm install --omit=dev \
-  && npx playwright install --with-deps chromium
-
-COPY --chown=node:node . .
-COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-
-RUN mkdir -p /app/data /ms-playwright \
-  && chown -R node:node /app /ms-playwright \
-  && chmod +x /usr/local/bin/docker-entrypoint.sh
+USER appuser
 
 EXPOSE 3000
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD node -e "fetch('http://127.0.0.1:' + (process.env.PORT || 3000) + '/api/health').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
-
-ENTRYPOINT ["docker-entrypoint.sh"]
-CMD []
+CMD ["python", "-m", "app.server"]

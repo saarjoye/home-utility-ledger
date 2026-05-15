@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>统计分析 - 家庭账单</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="brand">家庭账单</div>
+        <nav class="nav">
+          <a href="/index.html">账单看板</a>
+          <a class="active" href="/analytics.html">统计分析</a>
+          <a href="/admin.html">后台配置</a>
+        </nav>
+      </aside>
+      <main class="main">
+        <div class="topbar">
+          <div>
+            <h1>费用统计</h1>
+            <p class="sub">支持日、月、季、年、自定义时间段统计，并按电水燃拆分。</p>
+          </div>
+        </div>
+        <div class="tabs">
+          <button data-period="day">日</button>
+          <button data-period="month" class="active">月</button>
+          <button data-period="quarter">季</button>
+          <button data-period="year">年</button>
+        </div>
+        <section class="grid-2">
+          <div class="card chart-card">
+            <h2>费用走势</h2>
+            <div class="bars" id="analyticsBars"></div>
+          </div>
+          <div class="card">
+            <h2>渠道拆分</h2>
+            <div class="list" id="analyticsRows" style="margin-top:14px"></div>
+          </div>
+        </section>
+      </main>
+    </div>
+    <div class="toast" id="toast"></div>
+    <script src="/app.js"></script>
+  </body>
+</html>

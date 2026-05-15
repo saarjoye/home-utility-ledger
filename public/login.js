@@ -1,71 +1,22 @@
-(function () {
-  const form = document.getElementById("loginForm");
-  const errorBox = document.getElementById("loginError");
-  const loginButton = document.getElementById("loginButton");
+const toast = document.querySelector("#toast");
+function showToast(message) {
+  toast.textContent = message;
+  toast.style.display = "block";
+  setTimeout(() => toast.style.display = "none", 3200);
+}
 
-  document.addEventListener("DOMContentLoaded", () => {
-    checkExistingSession();
+document.querySelector("#loginForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = new FormData(event.currentTarget);
+  const res = await fetch("/api/login", {
+    method: "POST",
+    headers: {"content-type": "application/json"},
+    body: JSON.stringify(Object.fromEntries(form.entries()))
   });
-
-  form?.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    hideError();
-
-    const formData = new FormData(form);
-    const payload = {
-      username: String(formData.get("username") || "").trim(),
-      password: String(formData.get("password") || "")
-    };
-
-    loginButton.disabled = true;
-    loginButton.textContent = "登录中...";
-
-    try {
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(payload)
-      });
-
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(result.error || "登录失败");
-      }
-
-      window.location.href = "/admin";
-    } catch (error) {
-      showError(error.message || "登录失败");
-    } finally {
-      loginButton.disabled = false;
-      loginButton.textContent = "登录后台";
-    }
-  });
-
-  async function checkExistingSession() {
-    try {
-      const response = await fetch("/api/auth/me", {
-        headers: {
-          Accept: "application/json"
-        }
-      });
-      if (response.ok) {
-        window.location.href = "/admin";
-      }
-    } catch {
-      // Ignore.
-    }
+  const data = await res.json();
+  if (!data.ok) {
+    showToast(data.message || "登录失败");
+    return;
   }
-
-  function showError(message) {
-    errorBox.textContent = message;
-    errorBox.classList.remove("hidden");
-  }
-
-  function hideError() {
-    errorBox.textContent = "";
-    errorBox.classList.add("hidden");
-  }
-})();
+  location.href = "/index.html";
+});

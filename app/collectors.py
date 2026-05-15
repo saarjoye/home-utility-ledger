@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import re
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from urllib.parse import parse_qs, unquote_plus, urlencode, urlparse
 
 from urllib import request as urlrequest
@@ -207,7 +207,69 @@ def merge_sgcc_request_templates(getter_hits: dict, source: dict) -> None:
             missing_codes.remove(code)
         if not missing_codes:
             break
+    if missing_codes:
+        for template in build_sgcc_templates_from_user_info(getter_hits):
+            code = str(template.get("params4") or "")
+            if code in missing_codes:
+                templates.append({"requestBody": template})
+                missing_codes.remove(code)
+            if not missing_codes:
+                break
     getter_hits["getRequestParams"] = existing + templates
+
+
+def build_sgcc_templates_from_user_info(getter_hits: dict) -> list[dict]:
+    user_info = (getter_hits.get("getUserInfo") or [{}])[0]
+    power_user = (user_info.get("powerUserList") or [{}])[0]
+    user_id = clean(user_info.get("userId") or power_user.get("userId"))
+    login_account = clean(user_info.get("loginAccount") or user_info.get("loginAccount_dst"))
+    cons_no = clean(power_user.get("consNo_dst") or power_user.get("consNo"))
+    pro_code = clean(power_user.get("proNo") or power_user.get("provinceCode"))
+    org_no = clean(power_user.get("orgNo") or power_user.get("orgNo_dst"))
+    cons_type = clean(power_user.get("elecTypeCode") or power_user.get("consType") or "01")
+    if not (user_id and login_account and cons_no and pro_code):
+        return []
+    query_year = datetime.now().year
+    base_data = {
+        "acctId": user_id,
+        "consNo": cons_no,
+        "consType": cons_type,
+        "orgNo": org_no,
+        "queryYear": query_year,
+        "proCode": pro_code,
+        "provinceCode": pro_code,
+        "serialNo": "",
+        "srvCode": "",
+        "userName": login_account,
+        "funcCode": "WEBALIPAY_01",
+        "channelCode": "0902",
+        "clearCache": "11",
+        "promotCode": "1",
+        "promotType": "1",
+    }
+    month_payload = {
+        "data": {k: v for k, v in base_data.items() if v != ""},
+        "serviceCode": "BCP_000026",
+        "source": "app",
+        "target": pro_code,
+    }
+    today = datetime.now().date()
+    start = today - timedelta(days=7)
+    daily_data = {
+        **base_data,
+        "startTime": start.isoformat(),
+        "endTime": today.isoformat(),
+    }
+    daily_payload = {
+        "data": {k: v for k, v in daily_data.items() if v != ""},
+        "serviceCode": "BCP_000026",
+        "source": "app",
+        "target": pro_code,
+    }
+    return [
+        {"params3": month_payload, "params4": "010102"},
+        {"params3": daily_payload, "params4": "010103"},
+    ]
 
 
 def deep_find_sgcc_templates(source):

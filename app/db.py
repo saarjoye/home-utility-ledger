@@ -366,7 +366,7 @@ def delete_session(conn: sqlite3.Connection, token: str) -> None:
 
 def overview(conn: sqlite3.Connection) -> dict:
     accounts = list_accounts(conn)
-    total = conn.execute(
+    current_month = conn.execute(
         """
         SELECT utility_type, COALESCE(SUM(amount), 0) amount, COALESCE(SUM(usage_value), 0) usage
         FROM bills
@@ -374,16 +374,51 @@ def overview(conn: sqlite3.Connection) -> dict:
         GROUP BY utility_type
         """
     ).fetchall()
-    by_type = {row["utility_type"]: {"amount": row["amount"], "usage": row["usage"]} for row in total}
+    latest = conn.execute(
+        """
+        SELECT b.*
+        FROM bills b
+        JOIN (
+          SELECT utility_type, MAX(statement_date) statement_date
+          FROM bills
+          GROUP BY utility_type
+        ) x ON x.utility_type = b.utility_type AND x.statement_date = b.statement_date
+        WHERE b.id IN (
+          SELECT MAX(id)
+          FROM bills
+          GROUP BY utility_type, statement_date
+        )
+        ORDER BY b.utility_type
+        """
+    ).fetchall()
+    current_by_type = {row["utility_type"]: {"amount": row["amount"], "usage": row["usage"]} for row in current_month}
+    latest_by_type = {
+        row["utility_type"]: {
+            "amount": row["amount"],
+            "usage": row["usage_value"] or 0,
+            "statementDate": row["statement_date"],
+        }
+        for row in latest
+    }
     recent = conn.execute(
-        "SELECT * FROM bills ORDER BY statement_date DESC, id DESC LIMIT 8"
+        """
+        SELECT * FROM (
+          SELECT *,
+                 ROW_NUMBER() OVER (PARTITION BY utility_type ORDER BY statement_date DESC, id DESC) rn
+          FROM bills
+        )
+        WHERE rn <= 4
+        ORDER BY statement_date DESC, id DESC
+        LIMIT 12
+        """
     ).fetchall()
     daily = conn.execute(
         "SELECT * FROM daily_usage ORDER BY usage_date DESC LIMIT 14"
     ).fetchall()
     return {
         "accounts": accounts,
-        "summary": by_type,
+        "summary": current_by_type,
+        "latestSummary": latest_by_type,
         "recentBills": [dict(row) for row in recent],
         "dailyUsage": [dict(row) for row in daily],
     }

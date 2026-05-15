@@ -35,10 +35,10 @@ async function initDashboard() {
   const root = document.querySelector("#summaryCards");
   if (!root) return;
   const data = await api("/api/overview");
-  const summary = data.summary || {};
+  const summary = data.latestSummary || data.summary || {};
   const total = Object.values(summary).reduce((sum, item) => sum + Number(item.amount || 0), 0);
   root.innerHTML = [
-    `<div class="card metric"><div class="label">本月合计</div><div class="value">${money(total)}</div><p class="sub">来自已采集账单</p></div>`,
+    `<div class="card metric"><div class="label">最新账单合计</div><div class="value">${money(total)}</div><p class="sub">各渠道最近一期账单</p></div>`,
     card("electricity", summary.electricity),
     card("water", summary.water),
     card("gas", summary.gas),
@@ -61,7 +61,8 @@ async function initDashboard() {
 }
 
 function card(type, item = {}) {
-  return `<div class="card metric ${type === "electricity" ? "electric-card" : type === "water" ? "water-card" : "gas-card"}"><div class="label">${names[type]}</div><div class="value">${money(item.amount)}</div><p class="sub">用量 ${Number(item.usage || 0).toFixed(2)} ${units[type]}</p></div>`;
+  const date = item.statementDate ? ` · ${item.statementDate}` : "";
+  return `<div class="card metric ${type === "electricity" ? "electric-card" : type === "water" ? "water-card" : "gas-card"}"><div class="label">${names[type]}</div><div class="value">${money(item.amount)}</div><p class="sub">用量 ${Number(item.usage || 0).toFixed(2)} ${units[type]}${date}</p></div>`;
 }
 
 function renderBars(selector, rows) {

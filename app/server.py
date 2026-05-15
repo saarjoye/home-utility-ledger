@@ -156,11 +156,13 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/analytics":
             return self.redirect("/analytics.html")
         if path == "/healthz":
-            return self.json(200, {"ok": True, "app": "home-utility-ledger-standalone", "version": "standalone-2026.05.15.3"})
+            return self.json(200, {"ok": True, "app": "home-utility-ledger-standalone", "version": "standalone-2026.05.15.4"})
         if path == "/api/me":
             return self.json(200, {"ok": True, "authenticated": self.authed()})
         if path == "/login.html":
             return self.serve_static("login.html")
+        if path.endswith(".css") or path.endswith(".js") or path.startswith("/assets/"):
+            return self.serve_static(path.lstrip("/"))
         if path.startswith("/api/") and not self.require_auth():
             return
         if path == "/api/overview":
@@ -188,7 +190,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.json(200, {"ok": True, "data": get_settings(conn)})
             finally:
                 conn.close()
-        if path.endswith(".html") or path.startswith("/assets/") or path.endswith(".css") or path.endswith(".js"):
+        if path.endswith(".html"):
             if path != "/login.html" and not self.require_auth():
                 return
             return self.serve_static(path.lstrip("/"))

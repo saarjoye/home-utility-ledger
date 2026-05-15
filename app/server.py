@@ -38,6 +38,23 @@ PUBLIC = ROOT / "public"
 COOKIE_NAME = "hul_session"
 
 
+INTERNAL_ERROR_MARKERS = (
+    "010102",
+    "010103",
+    "params3",
+    "params4",
+    "getRequestParams",
+    "GB010",
+    "GB002",
+    "10010",
+    "10015",
+    "10009",
+    "10005",
+    "10002",
+    "Traceback",
+)
+
+
 def admin_user() -> str:
     return os.environ.get("ADMIN_USERNAME", "admin")
 
@@ -79,6 +96,24 @@ def parse_request_body(handler: BaseHTTPRequestHandler) -> dict:
         return {}
 
 
+def user_message(utility_type: str, exc: Exception) -> str:
+    raw = str(exc) or exc.__class__.__name__
+    if utility_type == "electricity":
+        if any(marker in raw for marker in INTERNAL_ERROR_MARKERS) or "模板" in raw or "登录状态" in raw:
+            return "国网授权已失效或页面状态不完整。请重新登录国网电费账单页，然后在后台重新导入。"
+        return raw if len(raw) <= 120 else "国网采集失败，请重新导入登录信息后再试。"
+    if any(marker in raw for marker in ("Traceback", "KeyError", "TypeError", "ValueError")):
+        return "采集失败，登录信息可能已失效，请重新导入后再试。"
+    return raw if len(raw) <= 160 else "采集失败，请重新导入登录信息后再试。"
+
+
+def generic_user_message(exc: Exception) -> str:
+    raw = str(exc) or exc.__class__.__name__
+    if any(marker in raw for marker in INTERNAL_ERROR_MARKERS):
+        return "操作失败，登录信息可能已失效，请重新导入后再试。"
+    return raw if len(raw) <= 160 else "操作失败，请检查导入内容后重试。"
+
+
 def run_collect_for(conn, utility_type: str) -> dict:
     account = get_account(conn, utility_type)
     payload = account["session_payload"]
@@ -110,8 +145,9 @@ def scheduler_loop():
                     try:
                         run_collect_for(conn, job["utility_type"])
                     except Exception as exc:
-                        mark_collected(conn, job["utility_type"], False, str(exc))
-                        insert_log(conn, "error", f"{job['utility_type']}-collector", str(exc))
+                        message = user_message(job["utility_type"], exc)
+                        mark_collected(conn, job["utility_type"], False, message)
+                        insert_log(conn, "error", f"{job['utility_type']}-collector", message, {"raw": str(exc)})
             conn.close()
         except Exception:
             pass
@@ -177,7 +213,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/analytics":
             return self.redirect("/analytics.html")
         if path == "/healthz":
-            return self.json(200, {"ok": True, "app": "home-utility-ledger-standalone", "version": "standalone-2026.05.15.12"})
+            return self.json(200, {"ok": True, "app": "home-utility-ledger-standalone", "version": "standalone-2026.05.15.13"})
         if path == "/api/me":
             return self.json(200, {"ok": True, "authenticated": self.authed()})
         if path == "/login.html":
@@ -287,8 +323,10 @@ class Handler(BaseHTTPRequestHandler):
                     update_account_test(conn, utility_type, True, result["message"])
                     return self.json(200, result)
                 except Exception as exc:
-                    update_account_test(conn, utility_type, False, str(exc))
-                    return self.json(400, {"ok": False, "message": str(exc)})
+                    message = user_message(utility_type, exc)
+                    update_account_test(conn, utility_type, False, message)
+                    insert_log(conn, "error", f"{utility_type}-test", message, {"raw": str(exc)})
+                    return self.json(400, {"ok": False, "message": message})
                 finally:
                     conn.close()
             if path.startswith("/api/collect/"):
@@ -297,8 +335,10 @@ class Handler(BaseHTTPRequestHandler):
                 try:
                     return self.json(200, run_collect_for(conn, utility_type))
                 except Exception as exc:
-                    mark_collected(conn, utility_type, False, str(exc))
-                    return self.json(400, {"ok": False, "message": str(exc)})
+                    message = user_message(utility_type, exc)
+                    mark_collected(conn, utility_type, False, message)
+                    insert_log(conn, "error", f"{utility_type}-collector", message, {"raw": str(exc)})
+                    return self.json(400, {"ok": False, "message": message})
                 finally:
                     conn.close()
             if path == "/api/settings":
@@ -310,7 +350,7 @@ class Handler(BaseHTTPRequestHandler):
                 finally:
                     conn.close()
         except Exception as exc:
-            return self.json(400, {"ok": False, "message": str(exc)})
+            return self.json(400, {"ok": False, "message": generic_user_message(exc)})
         return self.respond(404, b"Not Found")
 
     def serve_static(self, rel_path: str):

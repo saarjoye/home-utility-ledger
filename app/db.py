@@ -176,6 +176,7 @@ def list_accounts(conn: sqlite3.Connection) -> list[dict]:
         payload = json_loads(item.pop("session_payload"), {})
         item["configured"] = bool(payload)
         item["sessionSummary"] = summarize_payload(item["utility_type"], payload)
+        item["authStatus"] = account_auth_status(item, payload)
         out.append(item)
     return out
 
@@ -209,13 +210,62 @@ def summarize_payload(utility_type: str, payload: dict) -> dict:
     return {}
 
 
+def parse_iso(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def account_auth_status(item: dict, payload: dict) -> dict:
+    if not payload:
+        return {
+            "authorizedAt": "",
+            "expiresAt": "",
+            "expiresText": "尚未接入",
+            "hint": "请先导入登录信息。",
+            "needsReauth": True,
+        }
+
+    utility_type = item.get("utility_type")
+    authorized_at = payload.get("_authorizedAt") or item.get("updated_at") or ""
+    authorized_dt = parse_iso(authorized_at)
+    last_failed = item.get("last_test_status") == "error"
+
+    if utility_type == "electricity":
+        expires_dt = authorized_dt + timedelta(hours=12) if authorized_dt else None
+        expired = bool(expires_dt and expires_dt <= datetime.now())
+        needs_reauth = expired or last_failed
+        return {
+            "authorizedAt": authorized_at,
+            "expiresAt": expires_dt.isoformat(timespec="seconds") if expires_dt else "",
+            "expiresText": "约 12 小时内有效",
+            "hint": "国网登录状态有效期较短，失败或过期后请重新导入。",
+            "needsReauth": needs_reauth,
+        }
+
+    return {
+        "authorizedAt": authorized_at,
+        "expiresAt": "",
+        "expiresText": "失效后重新导入",
+        "hint": "当前登录信息已保存，若采集失败请重新导入。",
+        "needsReauth": last_failed,
+    }
+
+
 def update_account_session(conn: sqlite3.Connection, utility_type: str, payload: dict, account_no: str = "") -> None:
     status = "configured" if payload else "not_configured"
+    if payload:
+        payload = dict(payload)
+        payload["_authorizedAt"] = now_iso()
     conn.execute(
         """
         UPDATE accounts
         SET session_payload = ?, account_no = COALESCE(NULLIF(?, ''), account_no),
-            status = ?, updated_at = ?
+            status = ?, last_test_at = NULL, last_test_status = NULL,
+            last_test_message = NULL, updated_at = ?
         WHERE utility_type = ?
         """,
         (json.dumps(payload, ensure_ascii=False), account_no, status, now_iso(), utility_type),

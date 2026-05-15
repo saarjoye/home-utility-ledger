@@ -31,6 +31,21 @@ function statusText(account) {
   return "未接入";
 }
 
+function formatDateTime(value) {
+  if (!value) return "未导入";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value).replace("T", " ");
+  return date.toLocaleString("zh-CN", {hour12: false});
+}
+
+function providerIdentity(account) {
+  const summary = account.sessionSummary || {};
+  if (account.utility_type === "electricity") return summary.accountNo ? `用电户号 ${summary.accountNo}` : "已保存国网登录信息";
+  if (account.utility_type === "water") return summary.meterNumber ? `水表号 ${summary.meterNumber}` : "已保存杭水登录信息";
+  if (account.utility_type === "gas") return summary.userNo ? `燃气户号 ${summary.userNo}` : "已保存燃气登录信息";
+  return "已保存登录信息";
+}
+
 async function initDashboard() {
   const root = document.querySelector("#summaryCards");
   if (!root) return;
@@ -112,13 +127,30 @@ async function initAdmin() {
 
 function providerCard(account) {
   const colorClass = account.utility_type === "electricity" ? "electric-card" : account.utility_type === "water" ? "water-card" : "gas-card";
-  const importText = account.utility_type === "electricity" ? "导入登录状态" : "导入抓包文件";
+  const auth = account.authStatus || {};
+  const importText = account.configured ? "重新导入" : (account.utility_type === "electricity" ? "导入登录状态" : "导入抓包文件");
+  const authClass = auth.needsReauth ? "auth-warning" : "auth-ok";
   const desc = {
     electricity: "登录国网页面后导入登录状态，系统自动获取月账单和近 7 日日用电。",
     water: "导入杭水 e 家抓包文件，系统自动识别水表号和账单接口。",
     gas: "导入公众号查询页抓包文件，系统自动识别燃气户号、机构和账单记录。"
   }[account.utility_type];
-  return `<div class="provider-card ${colorClass}" data-type="${account.utility_type}"><div class="provider-head"><h2>${account.provider_name}</h2><span class="tag">${statusText(account)}</span></div><p class="helper">${desc}</p><div class="helper">当前识别：${JSON.stringify(account.sessionSummary || {})}</div><div style="display:flex;gap:10px"><button class="btn import-btn">${importText}</button><button class="btn secondary test-btn">测试连接</button></div></div>`;
+  const authNotice = auth.needsReauth
+    ? `<div class="auth-banner">登录信息可能已过期，请重新导入后再测试。</div>`
+    : "";
+  return `<div class="provider-card ${colorClass}" data-type="${account.utility_type}">
+    <div class="provider-head"><h2>${account.provider_name}</h2><span class="tag">${statusText(account)}</span></div>
+    <p class="helper">${desc}</p>
+    <div class="auth-panel ${authClass}">
+      <div><b>当前账号</b><span>${providerIdentity(account)}</span></div>
+      <div><b>最后授权</b><span>${formatDateTime(auth.authorizedAt)}</span></div>
+      <div><b>预计过期</b><span>${auth.expiresAt ? formatDateTime(auth.expiresAt) : (auth.expiresText || "失效后重新导入")}</span></div>
+      <div><b>状态说明</b><span>${auth.hint || "登录信息已保存。"}</span></div>
+    </div>
+    ${authNotice}
+    ${account.last_test_message ? `<p class="helper">最近测试：${account.last_test_message}</p>` : ""}
+    <div style="display:flex;gap:10px"><button class="btn import-btn">${importText}</button><button class="btn secondary test-btn">测试连接</button></div>
+  </div>`;
 }
 
 function bindProviderActions() {

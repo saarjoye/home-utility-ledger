@@ -188,6 +188,8 @@ def import_sgcc_state(text) -> dict:
 def sgcc_auth(payload: dict) -> dict:
     hits = payload["getterHits"]
     request_params = hits["getRequestParams"]
+    month_template = find_sgcc_request_template(request_params, "010102")
+    daily_template = find_sgcc_request_template(request_params, "010103")
     return {
         "keyCode": hits["getRequestCyu"]["data"]["keyCode"],
         "publicKey": hits["getRequestCyu"]["data"]["publicKey"],
@@ -195,9 +197,31 @@ def sgcc_auth(payload: dict) -> dict:
         "refreshToken": hits["getAccessToken"]["data"].get("refresh_token"),
         "token": hits["getToken"],
         "userInfo": (hits.get("getUserInfo") or [{}])[0],
-        "monthTemplate": request_params[3]["requestBody"],
-        "dailyTemplate": request_params[4]["requestBody"],
+        "monthTemplate": month_template,
+        "dailyTemplate": daily_template,
     }
+
+
+def find_sgcc_request_template(request_params, params4: str) -> dict:
+    if not isinstance(request_params, list):
+        raise ValueError("国网登录状态中的请求模板格式不正确，请重新导入登录信息")
+    for item in request_params:
+        if not isinstance(item, dict):
+            continue
+        body = item.get("requestBody") if isinstance(item.get("requestBody"), dict) else item
+        if isinstance(body, dict) and str(body.get("params4") or "") == params4:
+            return body
+    raise ValueError(f"国网登录状态缺少接口模板 {params4}，请在国网电费账单页面重新执行导出脚本")
+
+
+def sgcc_month_payload(template: dict) -> dict:
+    if not isinstance(template, dict):
+        raise ValueError("国网月账单请求模板格式不正确，请重新导入登录信息")
+    if isinstance(template.get("params3"), dict):
+        return template["params3"]
+    if "params3" in template and template.get("params3") is not None:
+        return {"params3": template.get("params3")}
+    return template
 
 
 def compact(data) -> str:
@@ -254,7 +278,7 @@ def sgcc_post(api_path: str, auth: dict, payload: dict) -> dict:
 
 def collect_sgcc(payload: dict) -> dict:
     auth = sgcc_auth(payload)
-    month_result = sgcc_post("/osg-open-bc0001/member/c01/f02", auth, auth["monthTemplate"]["params3"])
+    month_result = sgcc_post("/osg-open-bc0001/member/c01/f02", auth, sgcc_month_payload(auth["monthTemplate"]))
     daily_result = sgcc_post("/osg-web0004/member/c24/f01", auth, auth["dailyTemplate"])
     if str(month_result.get("code")) != "1":
         raise RuntimeError(month_result.get("message") or "国网月账单接口返回失败")

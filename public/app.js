@@ -122,6 +122,10 @@ function providerCard(account) {
 
 function bindProviderActions() {
   const dialog = document.querySelector("#importDialog");
+  const scriptBox = document.querySelector("#scriptBox");
+  const scriptContent = document.querySelector("#scriptContent");
+  const copyScript = document.querySelector("#copyScript");
+  const importContent = document.querySelector("#importContent");
   let currentType = "";
   document.querySelectorAll(".provider-card").forEach(card => {
     const type = card.dataset.type;
@@ -129,10 +133,12 @@ function bindProviderActions() {
       currentType = type;
       document.querySelector("#dialogTitle").textContent = `${names[type]}接入`;
       document.querySelector("#dialogHelp").textContent = type === "electricity"
-        ? "在已登录的国网电费页面打开浏览器控制台，执行导出脚本后粘贴完整 JSON。旧登录状态过期时需要重新导入。"
+        ? "先复制脚本，到已登录的国网电费页面控制台执行；再把输出的 JSON 粘贴到下方。"
         : "粘贴完整 HAR JSON，系统会自动识别必要登录信息。";
-      document.querySelector("#importContent").value = "";
-      document.querySelector("#importContent").placeholder = type === "electricity" ? sgccExportSnippet() : "粘贴完整 HAR JSON";
+      importContent.value = "";
+      importContent.placeholder = type === "electricity" ? "粘贴国网页面控制台输出的完整 JSON" : "粘贴完整 HAR JSON";
+      scriptBox.hidden = type !== "electricity";
+      scriptContent.value = type === "electricity" ? sgccExportSnippet() : "";
       dialog.showModal();
     };
     card.querySelector(".test-btn").onclick = async () => {
@@ -157,10 +163,22 @@ function bindProviderActions() {
       showToast(error.message);
     }
   };
+  copyScript.onclick = async () => {
+    scriptContent.focus();
+    scriptContent.select();
+    try {
+      await navigator.clipboard.writeText(scriptContent.value);
+      showToast("脚本已复制");
+    } catch (error) {
+      document.execCommand("copy");
+      showToast("已选中脚本，请按 Ctrl+C 复制");
+    }
+  };
+  scriptContent.onclick = () => scriptContent.select();
 }
 
 function sgccExportSnippet() {
-  return `在国网电费页面控制台执行以下脚本，并复制输出：\n\n(() => {\n  const app = document.querySelector("#app");\n  const vue = app && app.__vue__ ? app.__vue__ : null;\n  const root = vue && vue.$root ? vue.$root : null;\n  const store = root && root.$store ? root.$store : null;\n  const getters = (store && store.getters) || {};\n  const pattern = /key|token|access|request|public|user|power|door|auth|account/i;\n  const pick = (obj) => {\n    const out = {};\n    if (!obj || typeof obj !== "object") return out;\n    for (const key of Object.keys(obj)) {\n      if (!pattern.test(key)) continue;\n      try {\n        const value = obj[key];\n        out[key] = typeof value === "string" ? value : JSON.parse(JSON.stringify(value));\n      } catch (error) {\n        out[key] = String(error);\n      }\n    }\n    return out;\n  };\n  return JSON.stringify({\n    result: { value: {\n      href: location.href,\n      title: document.title,\n      getterHits: pick(getters),\n      sessionHits: pick({ ...sessionStorage }),\n      localHits: pick({ ...localStorage })\n    }}\n  }, null, 2);\n})()`;
+  return `(() => {\n  const app = document.querySelector("#app");\n  const vue = app && app.__vue__ ? app.__vue__ : null;\n  const root = vue && vue.$root ? vue.$root : null;\n  const store = root && root.$store ? root.$store : null;\n  const getters = (store && store.getters) || {};\n  const pattern = /key|token|access|request|public|user|power|door|auth|account/i;\n  const pick = (obj) => {\n    const out = {};\n    if (!obj || typeof obj !== "object") return out;\n    for (const key of Object.keys(obj)) {\n      if (!pattern.test(key)) continue;\n      try {\n        const value = obj[key];\n        out[key] = typeof value === "string" ? value : JSON.parse(JSON.stringify(value));\n      } catch (error) {\n        out[key] = String(error);\n      }\n    }\n    return out;\n  };\n  return JSON.stringify({\n    result: { value: {\n      href: location.href,\n      title: document.title,\n      getterHits: pick(getters),\n      sessionHits: pick({ ...sessionStorage }),\n      localHits: pick({ ...localStorage })\n    }}\n  }, null, 2);\n})()`;
 }
 
 initDashboard().catch(error => showToast(error.message));

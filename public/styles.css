@@ -216,6 +216,39 @@ textarea {
   resize: vertical;
 }
 
+textarea[readonly] {
+  cursor: pointer;
+}
+
+.script-box {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #f8fafc;
+}
+
+.script-box[hidden] {
+  display: none;
+}
+
+.script-box-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+#scriptContent {
+  min-height: 260px;
+  font-family: Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre;
+}
+
 .grid-4 {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

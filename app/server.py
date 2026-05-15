@@ -177,7 +177,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/analytics":
             return self.redirect("/analytics.html")
         if path == "/healthz":
-            return self.json(200, {"ok": True, "app": "home-utility-ledger-standalone", "version": "standalone-2026.05.15.10"})
+            return self.json(200, {"ok": True, "app": "home-utility-ledger-standalone", "version": "standalone-2026.05.15.11"})
         if path == "/api/me":
             return self.json(200, {"ok": True, "authenticated": self.authed()})
         if path == "/login.html":

@@ -308,6 +308,7 @@ def deep_find_sgcc_templates(source):
 
 def sgcc_auth(payload: dict) -> dict:
     hits = payload["getterHits"]
+    merge_sgcc_request_templates(hits, payload)
     request_params = hits["getRequestParams"]
     month_template = find_sgcc_request_template(request_params, "010102")
     daily_template = find_sgcc_request_template(request_params, "010103")

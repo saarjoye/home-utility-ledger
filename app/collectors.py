@@ -18,10 +18,25 @@ def clean(value) -> str:
 def load_json_text(text):
     if isinstance(text, (dict, list)):
         return text
-    text = str(text or "")
-    for candidate in (text, unquote_plus(text)):
+    text = str(text or "").strip()
+    candidates = [text, unquote_plus(text)]
+    if (text.startswith('"') and text.endswith('"')) or (text.startswith("'") and text.endswith("'")):
         try:
-            return json.loads(candidate)
+            candidates.append(json.loads(text))
+        except Exception:
+            candidates.append(text[1:-1])
+    json_object_match = re.search(r"(\{[\s\S]*\})", text)
+    if json_object_match:
+        candidates.append(json_object_match.group(1))
+    for candidate in candidates:
+        candidate = str(candidate or "").strip()
+        try:
+            parsed = json.loads(candidate)
+            if isinstance(parsed, str):
+                nested = parsed.strip()
+                if nested.startswith("{") or nested.startswith("["):
+                    return json.loads(nested)
+            return parsed
         except Exception:
             pass
     return None

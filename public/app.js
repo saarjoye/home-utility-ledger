@@ -133,7 +133,7 @@ function bindProviderActions() {
       currentType = type;
       document.querySelector("#dialogTitle").textContent = `${names[type]}接入`;
       document.querySelector("#dialogHelp").textContent = type === "electricity"
-        ? "先复制脚本，到已登录的国网电费页面控制台执行；再把输出的 JSON 粘贴到下方。"
+        ? "先复制脚本，到已登录的国网电费页面控制台执行。执行后通常会自动复制 JSON，再回到这里粘贴。"
         : "粘贴完整 HAR JSON，系统会自动识别必要登录信息。";
       importContent.value = "";
       importContent.placeholder = type === "electricity" ? "粘贴国网页面控制台输出的完整 JSON" : "粘贴完整 HAR JSON";
@@ -178,7 +178,7 @@ function bindProviderActions() {
 }
 
 function sgccExportSnippet() {
-  return `(() => {\n  const app = document.querySelector("#app");\n  const vue = app && app.__vue__ ? app.__vue__ : null;\n  const root = vue && vue.$root ? vue.$root : null;\n  const store = root && root.$store ? root.$store : null;\n  const getters = (store && store.getters) || {};\n  const pattern = /key|token|access|request|public|user|power|door|auth|account/i;\n  const pick = (obj) => {\n    const out = {};\n    if (!obj || typeof obj !== "object") return out;\n    for (const key of Object.keys(obj)) {\n      if (!pattern.test(key)) continue;\n      try {\n        const value = obj[key];\n        out[key] = typeof value === "string" ? value : JSON.parse(JSON.stringify(value));\n      } catch (error) {\n        out[key] = String(error);\n      }\n    }\n    return out;\n  };\n  return JSON.stringify({\n    result: { value: {\n      href: location.href,\n      title: document.title,\n      getterHits: pick(getters),\n      sessionHits: pick({ ...sessionStorage }),\n      localHits: pick({ ...localStorage })\n    }}\n  }, null, 2);\n})()`;
+  return `(() => {\n  const app = document.querySelector("#app");\n  const vue = app && app.__vue__ ? app.__vue__ : null;\n  const root = vue && vue.$root ? vue.$root : null;\n  const store = root && root.$store ? root.$store : null;\n  const getters = (store && store.getters) || {};\n  const pattern = /key|token|access|request|public|user|power|door|auth|account/i;\n  const pick = (obj) => {\n    const out = {};\n    if (!obj || typeof obj !== "object") return out;\n    for (const key of Object.keys(obj)) {\n      if (!pattern.test(key)) continue;\n      try {\n        const value = obj[key];\n        out[key] = typeof value === "string" ? value : JSON.parse(JSON.stringify(value));\n      } catch (error) {\n        out[key] = String(error);\n      }\n    }\n    return out;\n  };\n  const output = JSON.stringify({\n    result: { value: {\n      href: location.href,\n      title: document.title,\n      getterHits: pick(getters),\n      sessionHits: pick({ ...sessionStorage }),\n      localHits: pick({ ...localStorage })\n    }}\n  }, null, 2);\n  console.log(output);\n  if (typeof copy === "function") copy(output);\n  return "已生成登录信息 JSON；如果浏览器允许，内容已自动复制。否则请复制上方 console.log 输出的完整 JSON。";\n})()`;
 }
 
 initDashboard().catch(error => showToast(error.message));

@@ -63,6 +63,22 @@ def parse_json_body(handler: BaseHTTPRequestHandler) -> dict:
     return json.loads(raw.decode("utf-8"))
 
 
+def parse_request_body(handler: BaseHTTPRequestHandler) -> dict:
+    raw = read_body(handler)
+    if not raw:
+        return {}
+    content_type = handler.headers.get("content-type", "")
+    text = raw.decode("utf-8")
+    if "application/json" in content_type:
+        return json.loads(text)
+    if "application/x-www-form-urlencoded" in content_type:
+        return {key: values[-1] if values else "" for key, values in parse_qs(text).items()}
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        return {}
+
+
 def run_collect_for(conn, utility_type: str) -> dict:
     account = get_account(conn, utility_type)
     payload = account["session_payload"]
@@ -122,6 +138,11 @@ class Handler(BaseHTTPRequestHandler):
     def redirect(self, location: str):
         self.respond(302, b"", headers={"Location": location})
 
+    def see_other(self, location: str, headers=None):
+        merged = {"Location": location}
+        merged.update(headers or {})
+        self.respond(303, b"", headers=merged)
+
     def token(self) -> str:
         jar = cookies.SimpleCookie(self.headers.get("Cookie"))
         morsel = jar.get(COOKIE_NAME)
@@ -156,7 +177,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/analytics":
             return self.redirect("/analytics.html")
         if path == "/healthz":
-            return self.json(200, {"ok": True, "app": "home-utility-ledger-standalone", "version": "standalone-2026.05.15.4"})
+            return self.json(200, {"ok": True, "app": "home-utility-ledger-standalone", "version": "standalone-2026.05.15.5"})
         if path == "/api/me":
             return self.json(200, {"ok": True, "authenticated": self.authed()})
         if path == "/login.html":
@@ -200,7 +221,8 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path
         if path == "/api/login":
-            data = parse_json_body(self)
+            wants_json = "application/json" in self.headers.get("content-type", "")
+            data = parse_request_body(self)
             if data.get("username") == admin_user() and hashlib.sha256(str(data.get("password") or "").encode("utf-8")).hexdigest() == admin_password_hash():
                 token = secrets.token_urlsafe(32)
                 conn = self.db()
@@ -208,9 +230,15 @@ class Handler(BaseHTTPRequestHandler):
                     create_session(conn, admin_user(), token)
                 finally:
                     conn.close()
-                self.respond(200, json_dumps({"ok": True}), "application/json; charset=utf-8", {"Set-Cookie": f"{COOKIE_NAME}={token}; Path=/; HttpOnly; SameSite=Lax"})
+                cookie_header = f"{COOKIE_NAME}={token}; Path=/; HttpOnly; SameSite=Lax"
+                if wants_json:
+                    self.respond(200, json_dumps({"ok": True}), "application/json; charset=utf-8", {"Set-Cookie": cookie_header})
+                else:
+                    self.see_other("/index.html", {"Set-Cookie": cookie_header})
                 return
-            return self.json(401, {"ok": False, "message": "账号或密码错误"})
+            if wants_json:
+                return self.json(401, {"ok": False, "message": "账号或密码错误"})
+            return self.see_other("/login.html?error=1")
         if path == "/api/logout":
             token = self.token()
             conn = self.db()

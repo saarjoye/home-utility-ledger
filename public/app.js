@@ -10,6 +10,7 @@ const state = {
   detailType: new URLSearchParams(location.search).get("type") || "electricity",
   start: "",
   end: "",
+  anchorDate: today,
   billType: "electricity",
   dashboardView: "overview",
   detailSearch: "",
@@ -72,15 +73,28 @@ function dateKey(date = today) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
+function addMonths(date, amount) {
+  const next = new Date(date);
+  next.setMonth(next.getMonth() + amount);
+  return next;
+}
+
+function addYears(date, amount) {
+  const next = new Date(date);
+  next.setFullYear(next.getFullYear() + amount);
+  return next;
+}
+
 function rangeFor(period = state.period) {
-  const y = today.getFullYear();
-  const m = today.getMonth();
+  const anchor = state.anchorDate instanceof Date && !Number.isNaN(state.anchorDate.getTime()) ? state.anchorDate : today;
+  const y = anchor.getFullYear();
+  const m = anchor.getMonth();
   if (period === "all") return { start: "0000-01-01", end: "9999-12-31", label: "全部已落盘账单", text: "当前：全部账单" };
-  if (period === "day") return { start: dateKey(today), end: dateKey(today), label: dateKey(today), text: "当前：今日" };
+  if (period === "day") return { start: dateKey(anchor), end: dateKey(anchor), label: dateKey(anchor), text: "当前：今日" };
   if (period === "week") {
-    const day = today.getDay() || 7;
-    const start = new Date(y, m, today.getDate() - day + 1);
-    const end = new Date(y, m, today.getDate() - day + 7);
+    const day = anchor.getDay() || 7;
+    const start = new Date(y, m, anchor.getDate() - day + 1);
+    const end = new Date(y, m, anchor.getDate() - day + 7);
     return { start: dateKey(start), end: dateKey(end), label: `${dateKey(start)} 至 ${dateKey(end)}`, text: "当前：本周" };
   }
   if (period === "quarter") {
@@ -91,8 +105,32 @@ function rangeFor(period = state.period) {
   }
   if (period === "year") return { start: `${y}-01-01`, end: `${y}-12-31`, label: `${y} 年`, text: `当前：${y} 年` };
   if (period === "custom" && state.start && state.end) return { start: state.start, end: state.end, label: `${state.start} 至 ${state.end}`, text: "当前：自定义时间" };
+  const start = `${y}-${String(m + 1).padStart(2, "0")}-01`;
   const end = new Date(y, m + 1, 0);
-  return { start: `${monthKey()}-01`, end: dateKey(end), label: `${monthKey()}-01 至 ${dateKey(end)}`, text: `当前：${y} 年 ${m + 1} 月` };
+  return { start, end: dateKey(end), label: `${start} 至 ${dateKey(end)}`, text: `当前：${y} 年 ${m + 1} 月` };
+}
+
+function periodNavMeta() {
+  const range = rangeFor();
+  const anchor = state.anchorDate instanceof Date ? state.anchorDate : today;
+  const y = anchor.getFullYear();
+  const m = anchor.getMonth();
+  if (state.period === "all") return { label: "全部账单", value: "不限定时间", canStep: false };
+  if (state.period === "day") return { label: "当前日期", value: dateKey(anchor), canStep: true };
+  if (state.period === "week") return { label: "当前周", value: range.label, canStep: true };
+  if (state.period === "quarter") return { label: "当前季度", value: `${y} 年 Q${Math.floor(m / 3) + 1}`, canStep: true };
+  if (state.period === "year") return { label: "当前年份", value: `${y} 年`, canStep: true };
+  if (state.period === "custom") return { label: "自定义时段", value: range.label, canStep: false };
+  return { label: "当前月份", value: `${y} 年 ${m + 1} 月`, canStep: true };
+}
+
+function shiftPeriod(direction) {
+  const step = direction < 0 ? -1 : 1;
+  if (state.period === "day") state.anchorDate = new Date(state.anchorDate.getFullYear(), state.anchorDate.getMonth(), state.anchorDate.getDate() + step);
+  else if (state.period === "week") state.anchorDate = new Date(state.anchorDate.getFullYear(), state.anchorDate.getMonth(), state.anchorDate.getDate() + step * 7);
+  else if (state.period === "quarter") state.anchorDate = addMonths(state.anchorDate, step * 3);
+  else if (state.period === "year") state.anchorDate = addYears(state.anchorDate, step);
+  else if (state.period === "month") state.anchorDate = addMonths(state.anchorDate, step);
 }
 
 function latestDate(summary) {
@@ -222,6 +260,7 @@ function wireRangeTabs(rootSelector, onChange) {
       state.period = period;
       state.start = "";
       state.end = "";
+      state.anchorDate = today;
       root.querySelectorAll("button").forEach((item) => item.classList.toggle("active", item === btn));
       onChange(period);
     };
@@ -239,6 +278,7 @@ function openRangeDialog(onApply) {
     state.period = "custom";
     state.start = document.querySelector("#customStart").value;
     state.end = document.querySelector("#customEnd").value;
+    state.anchorDate = state.start ? new Date(state.start) : today;
     dialog.close();
     document.querySelectorAll(".range-tabs button").forEach((btn) => btn.classList.toggle("active", btn.dataset.period === "custom"));
     onApply("custom");
@@ -510,6 +550,23 @@ async function initDetail() {
       renderDetail(data);
     };
   }
+  bindPeriodNavigator(data);
+}
+
+function bindPeriodNavigator(data) {
+  const prev = document.querySelector("#periodPrev");
+  const next = document.querySelector("#periodNext");
+  if (!prev || !next) return;
+  prev.onclick = () => {
+    shiftPeriod(-1);
+    state.detailPage = 1;
+    renderDetail(data);
+  };
+  next.onclick = () => {
+    shiftPeriod(1);
+    state.detailPage = 1;
+    renderDetail(data);
+  };
 }
 
 function syncDetailRangeTabs() {
@@ -527,6 +584,17 @@ function syncDetailRangeTabs() {
   root.querySelectorAll("button").forEach((btn) => {
     btn.hidden = isPeriodBillType && ["day", "week"].includes(btn.dataset.period);
     btn.classList.toggle("active", btn.dataset.period === state.period);
+  });
+}
+
+function syncPeriodNavigator() {
+  const nav = document.querySelector("#periodNavigator");
+  if (!nav) return;
+  const meta = periodNavMeta();
+  document.querySelector("#periodNavLabel").textContent = meta.label;
+  document.querySelector("#periodNavValue").textContent = meta.value;
+  nav.querySelectorAll("button").forEach((button) => {
+    button.disabled = !meta.canStep;
   });
 }
 
@@ -554,6 +622,7 @@ function renderDetail(data) {
     : `当前 ${filteredRows.length} 条 / 全部 ${allRows.length} 条`;
   document.querySelector("#detailTrendTitle").textContent = type === "electricity" ? "近 7 日用电" : "账期趋势";
   syncDetailRangeTabs();
+  syncPeriodNavigator();
   renderDetailMetrics(type, summary, data);
   renderDetailInfo(type, account, summary);
   renderDetailAvailability(type);

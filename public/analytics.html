@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>费用详情 - 家庭能源账本</title>
-    <link rel="stylesheet" href="/styles.css?v=20260516-detail-layout">
+    <link rel="stylesheet" href="/styles.css?v=20260516-period-nav">
   </head>
   <body>
     <div class="mobile-detail detail-shell">
@@ -26,6 +26,14 @@
         <div class="panel-head">
           <h2>统计范围</h2>
           <span id="detailRangeLabel">--</span>
+        </div>
+        <div class="period-navigator" id="periodNavigator">
+          <button class="btn secondary" id="periodPrev" type="button">‹</button>
+          <div>
+            <span id="periodNavLabel">当前月份</span>
+            <b id="periodNavValue">--</b>
+          </div>
+          <button class="btn secondary" id="periodNext" type="button">›</button>
         </div>
         <div class="range-tabs mobile" id="detailRangeTabs">
           <button data-period="day">日</button>
@@ -92,6 +100,6 @@
     </dialog>
 
     <div class="toast" id="toast"></div>
-    <script src="/app.js?v=20260516-detail-layout"></script>
+    <script src="/app.js?v=20260516-period-nav"></script>
   </body>
 </html>

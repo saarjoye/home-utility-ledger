@@ -351,18 +351,23 @@ a { color: inherit; text-decoration: none; }
 #periodInfoCard {
   grid-column: 1;
 }
+#detailFilterCard { grid-row: 4; }
+#periodInfoCard { grid-row: 5; }
 #detailCalendarCard,
 #detailTrendCard,
 #detailBillsCard {
   grid-column: 2;
 }
+#detailCalendarCard { grid-row: 4; }
+#detailTrendCard { grid-row: 5; }
+#detailBillsCard { grid-row: 6; }
 body[data-detail="water"] #detailTrendCard,
 body[data-detail="gas"] #detailTrendCard {
   grid-row: 4;
 }
 body[data-detail="water"] #detailBillsCard,
 body[data-detail="gas"] #detailBillsCard {
-  grid-row: 5 / span 2;
+  grid-row: 5;
 }
 #detailBillsCard {
   min-height: 420px;
@@ -401,6 +406,39 @@ body[data-detail="gas"] #detailBillsCard {
   grid-template-columns: minmax(0, 1fr) 150px;
   gap: 10px;
   margin-top: 14px;
+}
+.period-navigator {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  gap: 10px;
+  align-items: center;
+}
+.period-navigator button {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  font-size: 24px;
+}
+.period-navigator button[disabled] {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+.period-navigator div {
+  min-height: 44px;
+  display: grid;
+  place-items: center;
+  gap: 2px;
+  border-radius: 14px;
+  background: #f8fafc;
+}
+.period-navigator span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+}
+.period-navigator b {
+  color: var(--ink);
+  font-size: 14px;
 }
 .detail-chart-viewport {
   width: 100%;

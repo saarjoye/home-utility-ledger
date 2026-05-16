@@ -12,6 +12,9 @@ const state = {
   end: "",
   billType: "electricity",
   dashboardView: "overview",
+  detailSearch: "",
+  detailPage: 1,
+  detailPageSize: 20,
   overview: null,
 };
 
@@ -116,6 +119,52 @@ function summarizeDaily(rows) {
   const usage = rows.reduce((sum, item) => sum + Number(item.usage_value || 0), 0);
   const last = [...rows].sort((a, b) => String(a.usage_date).localeCompare(String(b.usage_date))).pop() || {};
   return { amount: amountRows.length ? total : null, usage, statementDate: last.usage_date || "", source: "daily", count: rows.length };
+}
+
+function periodMonth(value) {
+  return value ? String(value).slice(0, 7) : "--";
+}
+
+function periodLabel(row = {}, type = "electricity") {
+  const start = row.period_start || row.periodStart || "";
+  const end = row.period_end || row.periodEnd || "";
+  const statement = row.statement_date || row.statementDate || "";
+  if (type === "electricity") return periodMonth(statement);
+  if (type === "water") return periodMonth(statement);
+  if (start && end) {
+    const startMonth = periodMonth(start);
+    const endMonth = periodMonth(end);
+    return startMonth === endMonth ? startMonth : `${startMonth} 至 ${endMonth}`;
+  }
+  return periodMonth(statement);
+}
+
+function settlementText(row = {}, type = "electricity") {
+  if (type === "electricity") return "月度账单";
+  if (type === "water") return "月账单";
+  const start = row.period_start || row.periodStart || "";
+  const end = row.period_end || row.periodEnd || "";
+  if (start && end && periodMonth(start) !== periodMonth(end)) return "跨期结算";
+  return "结算账单";
+}
+
+function filterDetailRows(rows = []) {
+  const keyword = String(state.detailSearch || "").trim().toLowerCase();
+  if (!keyword) return rows;
+  return rows.filter((row) => {
+    const haystack = [
+      row.statement_date,
+      row.period_start,
+      row.period_end,
+      row.usage_value,
+      row.usage_unit,
+      row.amount,
+      row.source_channel,
+      periodLabel(row, state.detailType),
+      settlementText(row, state.detailType),
+    ].filter((item) => item !== null && item !== undefined).join(" ").toLowerCase();
+    return haystack.includes(keyword);
+  });
 }
 
 function scopedOverview(data) {
@@ -441,7 +490,26 @@ async function initDetail() {
   state.overview = data;
   syncDetailRangeTabs();
   renderDetail(data);
-  wireRangeTabs("#detailRangeTabs", () => renderDetail(data));
+  wireRangeTabs("#detailRangeTabs", () => {
+    state.detailPage = 1;
+    renderDetail(data);
+  });
+  const search = document.querySelector("#detailSearch");
+  const pageSize = document.querySelector("#detailPageSize");
+  if (search) {
+    search.oninput = () => {
+      state.detailSearch = search.value;
+      state.detailPage = 1;
+      renderDetail(data);
+    };
+  }
+  if (pageSize) {
+    pageSize.onchange = () => {
+      state.detailPageSize = Number(pageSize.value || 20);
+      state.detailPage = 1;
+      renderDetail(data);
+    };
+  }
 }
 
 function syncDetailRangeTabs() {
@@ -468,17 +536,23 @@ function renderDetail(data) {
   const summary = (data.latestSummary || {})[type] || {};
   const allRows = ((data.allBillsByType || data.billsByType || {})[type] || []);
   const filteredRows = ((data.billsByType || {})[type] || []);
+  const baseRows = state.period === "all" ? allRows : filteredRows;
+  const visibleRows = filterDetailRows(baseRows);
   const account = (data.accounts || []).find((item) => item.utility_type === type) || {};
   const range = rangeFor();
   document.body.dataset.detail = type;
-  document.querySelector("#detailTitle").textContent = `${names[type]}信息`;
+  document.querySelector("#detailTitle").textContent = `${names[type]}详情`;
   document.querySelector("#detailRefresh").textContent = latestRun(data.accounts || []);
-  document.querySelector("#detailPeriod").textContent = summary.statementDate ? String(summary.statementDate).slice(0, 7) : "--";
-  document.querySelector("#detailAmountLabel").textContent = type === "electricity" ? "最近电费账单" : `本期${names[type]}`;
+  document.querySelector("#detailPeriod").textContent = summary.statementDate ? periodMonth(summary.statementDate) : "--";
+  document.querySelector("#detailAmountLabel").textContent = type === "electricity" ? "最近电费账单" : "当前账期费用";
   document.querySelector("#detailAmount").textContent = money(summary.amount);
   document.querySelector("#detailRangeLabel").textContent = range.label;
-  document.querySelector("#detailBillTitle").textContent = `${names[type]}账单列表${state.period === "all" ? `（全部 ${allRows.length} 条）` : `（当前筛选 ${filteredRows.length} 条 / 全部 ${allRows.length} 条）`}`;
-  document.querySelector("#detailTrendTitle").textContent = type === "electricity" ? "近 7 日用电柱状图" : `近 6 期${names[type]}趋势`;
+  document.querySelector("#detailBillTitle").textContent = type === "electricity" ? "账单明细" : "账期明细";
+  document.querySelector("#periodInfoTitle").textContent = type === "water" ? "水费账期说明" : "燃气结算说明";
+  document.querySelector("#detailBillCount").textContent = state.period === "all"
+    ? `全部 ${allRows.length} 条`
+    : `当前 ${filteredRows.length} 条 / 全部 ${allRows.length} 条`;
+  document.querySelector("#detailTrendTitle").textContent = type === "electricity" ? "近 7 日用电" : "账期趋势";
   syncDetailRangeTabs();
   renderDetailMetrics(type, summary, data);
   renderDetailInfo(type, account, summary);
@@ -488,9 +562,9 @@ function renderDetail(data) {
   document.querySelector("#periodInfoCard").hidden = type === "electricity";
   const trendRows = type === "electricity"
     ? (data.dailyUsage || []).slice(0, 7).reverse().map((row) => [String(row.usage_date).slice(5), Number(row.amount || row.usage_value || 0)])
-    : (state.period === "all" ? allRows : filteredRows).slice(0, 12).reverse().map((row) => [String(row.statement_date).slice(0, 7), Number(row.amount || 0)]);
+    : baseRows.slice(0, 24).reverse().map((row) => [periodLabel(row, type), Number(row.amount || 0)]);
   renderBars("#analyticsBars", trendRows, accents[type]);
-  renderDetailBills(type, state.period === "all" ? allRows : filteredRows, allRows.length, filteredRows.length);
+  renderDetailBills(type, visibleRows, allRows.length, filteredRows.length, baseRows.length);
 }
 
 function renderDetailAvailability(type) {
@@ -503,7 +577,9 @@ function renderDetailAvailability(type) {
   }
   note.textContent = type === "electricity"
     ? "电费日历展示已采集的日用电量；单日金额通常要等国网月账单出账后才能确认。"
-    : `${names[type]}目前按账期账单统计，官方渠道未提供可稳定采集的每日用量明细。`;
+    : type === "water"
+      ? "水费按官方月账单统计，当前渠道没有稳定的每日用水明细。"
+      : "燃气按实际结算账期统计，一条账单可能覆盖 1 个月或多个月，不按每日明细展示。";
 }
 
 function renderDetailMetrics(type, summary, data) {
@@ -516,7 +592,7 @@ function renderDetailMetrics(type, summary, data) {
   const change = previousUsage ? Math.round((usage - previousUsage) / previousUsage * 100) : 0;
   const metrics = type === "electricity"
     ? [["日总用电", usage ? fmt(usage) + "°" : "--"], ["日电费", "待出账"], ["本月用电", fmt(usage) + "°"], ["最近账单", money(summary.billAmount ?? summary.amount)], ["年电费", money(bills.length ? bills.reduce((sum, item) => sum + Number(item.amount || 0), 0) : null)], ["年用电", fmt(bills.reduce((sum, item) => sum + Number(item.usage_value || 0), 0)) + "°"]]
-    : [["账单条数", metricRows.length], [`统计${type === "water" ? "用水" : "用气"}`, `${fmt(metricRows.reduce((sum, item) => sum + Number(item.usage_value || 0), 0))}${units[type]}`], ["统计费用", money(metricRows.length ? metricRows.reduce((sum, item) => sum + Number(item.amount || 0), 0) : null)], [`本期${type === "water" ? "用水" : "用气"}`, `${fmt(usage)}${units[type]}`], [`上期${type === "water" ? "用水" : "用气"}`, `${fmt(previousUsage)}${units[type]}`], ["同比变化", `${change >= 0 ? "+" : ""}${change}%`]];
+    : [["账期条数", metricRows.length], [`统计${type === "water" ? "用水" : "用气"}`, `${fmt(metricRows.reduce((sum, item) => sum + Number(item.usage_value || 0), 0))}${units[type]}`], ["统计费用", money(metricRows.length ? metricRows.reduce((sum, item) => sum + Number(item.amount || 0), 0) : null)], [`当前账期${type === "water" ? "用水" : "用气"}`, `${fmt(usage)}${units[type]}`], [`上期${type === "water" ? "用水" : "用气"}`, `${fmt(previousUsage)}${units[type]}`], ["环比变化", `${change >= 0 ? "+" : ""}${change}%`]];
   document.querySelector("#detailMetrics").innerHTML = metrics.map(([label, value]) => `<div><b>${label}</b><strong>${value}</strong></div>`).join("");
 }
 
@@ -524,20 +600,39 @@ function renderDetailInfo(type, account, summary) {
   const root = document.querySelector("#periodInfo");
   if (!root) return;
   const rows = type === "water"
-    ? [["抄表日期", summary.statementDate || "--"], ["用户编号", providerIdentity(account)], ["缴费状态", "已缴清"]]
-    : [["燃气户号", providerIdentity(account)], ["表具编号", account.sessionSummary?.orgId || "--"], ["账单状态", "已出账"]];
+    ? [["账单模型", "按月账单"], ["最近账期", periodMonth(summary.statementDate)], ["用户编号", providerIdentity(account)]]
+    : [["账单模型", "按结算账期"], ["最近账期", periodMonth(summary.statementDate)], ["燃气户号", providerIdentity(account)]];
   root.innerHTML = rows.map(([label, value]) => `<div><span>${label}</span><b>${value}</b></div>`).join("");
 }
 
-function renderDetailBills(type, rows, totalCount = rows.length, filteredCount = rows.length) {
+function renderDetailBills(type, rows, totalCount = rows.length, filteredCount = rows.length, scopedCount = rows.length) {
   const root = document.querySelector("#analyticsRows");
-  const header = totalCount !== rows.length || filteredCount !== rows.length
-    ? `<p class="helper bill-count-note">当前显示 ${rows.length} 条，本地共 ${totalCount} 条。</p>`
-    : "";
-  root.innerHTML = header + (rows.map((item) => `<div class="bill-item ${type}">
-    <div><b>${String(item.statement_date).slice(0, 7)} ${type === "electricity" ? "电费" : type === "water" ? "用水" : "用气"} ${fmt(item.usage_value)} ${item.usage_unit || units[type]}</b></div>
+  const pager = document.querySelector("#detailPager");
+  const pageSize = Math.max(1, Number(state.detailPageSize || 20));
+  const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
+  state.detailPage = Math.min(Math.max(1, Number(state.detailPage || 1)), pageCount);
+  const start = (state.detailPage - 1) * pageSize;
+  const pageRows = rows.slice(start, start + pageSize);
+  const header = `<p class="helper bill-count-note">当前范围 ${scopedCount} 条，搜索后 ${rows.length} 条，本地共 ${totalCount} 条。</p>`;
+  root.innerHTML = header + (pageRows.map((item) => `<div class="bill-item ${type}">
+    <div>
+      <b>${periodLabel(item, type)} · ${type === "electricity" ? "电费账单" : type === "water" ? "月账单" : settlementText(item, type)}</b>
+      <span>${fmt(item.usage_value)} ${item.usage_unit || units[type]} · 出账日 ${String(item.statement_date || "--").slice(0, 10)}</span>
+    </div>
     <strong>${money(item.amount)}</strong>
   </div>`).join("") || `<p class="helper">暂无${names[type]}账单；可切换为“全部”查看已落盘历史账单。</p>`);
+  if (!pager) return;
+  pager.innerHTML = rows.length > pageSize ? `
+    <span>第 ${start + 1}-${Math.min(start + pageSize, rows.length)} 条 / 共 ${rows.length} 条</span>
+    <div>
+      <button class="btn secondary" id="detailPrevPage" ${state.detailPage <= 1 ? "disabled" : ""}>上一页</button>
+      <button class="btn" id="detailNextPage" ${state.detailPage >= pageCount ? "disabled" : ""}>下一页</button>
+    </div>
+  ` : `<span>共 ${rows.length} 条</span>`;
+  const prev = document.querySelector("#detailPrevPage");
+  const next = document.querySelector("#detailNextPage");
+  if (prev) prev.onclick = () => { state.detailPage -= 1; renderDetail(state.overview); };
+  if (next) next.onclick = () => { state.detailPage += 1; renderDetail(state.overview); };
 }
 
 async function initAdmin() {
@@ -551,6 +646,7 @@ async function initAdmin() {
   document.querySelector("#pushDaily").checked = settings.push_daily_summary === "true";
   document.querySelector("#pushFailure").checked = settings.push_failure_alert === "true";
   bindProviderActions();
+  bindElectricityHistoryImport();
   await loadLogs();
   document.querySelector("#refreshLogs").onclick = loadLogs;
   document.querySelector("#saveSettings").onclick = async () => {
@@ -578,6 +674,10 @@ function logRow(row) {
     details.dailyReceived !== undefined ? `日数据 ${details.dailyReceived} 条` : "",
     details.billsInserted !== undefined ? `新增账单 ${details.billsInserted} 条` : "",
     details.dailyInserted !== undefined ? `新增日数据 ${details.dailyInserted} 条` : "",
+    details.monthlyReceived !== undefined ? `月账单 ${details.monthlyReceived} 条` : "",
+    details.monthlyInserted !== undefined ? `写入月账单 ${details.monthlyInserted} 条` : "",
+    details.annualReceived !== undefined ? `年度汇总 ${details.annualReceived} 条` : "",
+    details.detailReceived !== undefined ? `账单详情 ${details.detailReceived} 条` : "",
   ].filter(Boolean).join(" · ");
   const rowsHtml = renderLogDetailRows(details);
   const diagnosis = renderLogDiagnosis(details);
@@ -648,6 +748,7 @@ function providerCard(account) {
     <div class="provider-actions">
       <button class="btn test-btn">测试采集</button>
       <button class="btn secondary import-btn">${account.configured ? "重新授权" : "开始接入"}</button>
+      ${account.utility_type === "electricity" ? `<button class="btn secondary history-btn" type="button">历史导入</button>` : ""}
     </div>
   </article>`;
 }
@@ -687,6 +788,10 @@ function bindProviderActions() {
         showToast(error.message);
       }
     };
+    const historyBtn = card.querySelector(".history-btn");
+    if (historyBtn) {
+      historyBtn.onclick = () => document.querySelector("#electricityHistory")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   });
   document.querySelector("#confirmImport").onclick = async (event) => {
     event.preventDefault();
@@ -715,6 +820,68 @@ function bindProviderActions() {
     }
   };
   scriptContent.onclick = () => scriptContent.select();
+}
+
+function bindElectricityHistoryImport() {
+  const button = document.querySelector("#importElectricityHistory");
+  const fileInput = document.querySelector("#electricityHistoryFile");
+  const resultRoot = document.querySelector("#electricityHistoryResult");
+  if (!button || !fileInput || !resultRoot) return;
+  button.onclick = async () => {
+    const file = fileInput.files?.[0];
+    if (!file) {
+      showToast("请先选择国电历史数据 Excel 文件");
+      return;
+    }
+    try {
+      button.disabled = true;
+      button.textContent = "正在导入...";
+      const contentBase64 = await readFileAsBase64(file);
+      const result = await api("/api/import/electricity-history", {
+        method: "POST",
+        body: JSON.stringify({ filename: file.name, contentBase64 }),
+      });
+      resultRoot.innerHTML = historyImportResult(result);
+      showToast(result.message || "国电历史数据已导入");
+      await loadLogs();
+    } catch (error) {
+      resultRoot.innerHTML = `<p class="helper error-text">${error.message}</p>`;
+      showToast(error.message);
+    } finally {
+      button.disabled = false;
+      button.textContent = "导入国电历史数据";
+    }
+  };
+}
+
+function readFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error || new Error("文件读取失败"));
+    reader.readAsDataURL(file);
+  });
+}
+
+function historyImportResult(result) {
+  const data = result.data || result.summary || result;
+  const chips = [
+    ["月账单", data.monthlyReceived, data.monthlyInserted],
+    ["日用电", data.dailyReceived, data.dailyInserted],
+    ["年度汇总", data.annualReceived, data.annualSaved],
+    ["账单详情", data.detailReceived, data.detailSaved],
+  ].map(([label, received, saved]) => `<div><span>${label}</span><b>${received || 0}</b><small>写入 ${saved || 0}</small></div>`).join("");
+  const daily = (data.sampleDaily || []).map((row) => `<li>${row.usageDate} · ${fmt(row.usageValue)} 度 · ${money(row.amount)}</li>`).join("");
+  const monthly = (data.sampleMonthly || []).map((row) => `<li>${String(row.statementDate || "").slice(0, 7)} · ${fmt(row.usageValue)} 度 · ${money(row.amount)}</li>`).join("");
+  const details = (data.sampleDetails || []).slice(0, 6).map((row) => `<li>${row.statementMonth} · ${row.module} · ${row.itemName} ${row.itemValue || ""}${row.unit || ""}</li>`).join("");
+  return `<div class="history-result-card">
+    <div class="history-result-metrics">${chips}</div>
+    <div class="history-result-preview">
+      <section><b>日用电预览</b><ul>${daily || "<li>无</li>"}</ul></section>
+      <section><b>月账单预览</b><ul>${monthly || "<li>无</li>"}</ul></section>
+      <section><b>账单详情预览</b><ul>${details || "<li>无</li>"}</ul></section>
+    </div>
+  </div>`;
 }
 
 function sgccExportSnippet() {

@@ -4,10 +4,10 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>费用详情 - 家庭能源账本</title>
-    <link rel="stylesheet" href="/styles.css?v=20260516-summary-links">
+    <link rel="stylesheet" href="/styles.css?v=20260516-history-import">
   </head>
   <body>
-    <div class="mobile-detail">
+    <div class="mobile-detail detail-shell">
       <header class="detail-header">
         <a href="/index.html">‹</a>
         <h1 id="detailTitle">费用信息</h1>
@@ -20,7 +20,9 @@
         <div class="hero-amount"><span id="detailAmountLabel">本期费用</span><strong id="detailAmount">¥ 0.00</strong></div>
       </section>
 
-      <section class="detail-card">
+      <section class="detail-metrics" id="detailMetrics"></section>
+
+      <section class="detail-card" id="detailFilterCard">
         <div class="panel-head">
           <h2>统计范围</h2>
           <span id="detailRangeLabel">--</span>
@@ -33,9 +35,15 @@
           <button data-period="year">年</button>
           <button data-period="custom">自定义</button>
         </div>
+        <div class="detail-tools">
+          <input class="input" id="detailSearch" placeholder="搜索账期、金额或来源">
+          <select class="input" id="detailPageSize">
+            <option value="20">每页 20 条</option>
+            <option value="50">每页 50 条</option>
+            <option value="100">每页 100 条</option>
+          </select>
+        </div>
       </section>
-
-      <section class="detail-metrics" id="detailMetrics"></section>
 
       <section class="detail-card" id="detailCalendarCard">
         <div class="panel-head">
@@ -51,14 +59,20 @@
         <div class="info-list" id="periodInfo"></div>
       </section>
 
-      <section class="detail-card">
+      <section class="detail-card" id="detailTrendCard">
         <h2 id="detailTrendTitle">近期趋势</h2>
-        <div class="bars compact detail-bars" id="analyticsBars"></div>
+        <div class="detail-chart-viewport">
+          <div class="bars compact detail-bars" id="analyticsBars"></div>
+        </div>
       </section>
 
-      <section class="detail-card">
-        <h2 id="detailBillTitle">账单列表</h2>
+      <section class="detail-card" id="detailBillsCard">
+        <div class="panel-head">
+          <h2 id="detailBillTitle">账单列表</h2>
+          <span id="detailBillCount">--</span>
+        </div>
         <div class="bill-list" id="analyticsRows"></div>
+        <div class="detail-pager" id="detailPager"></div>
       </section>
     </div>
 
@@ -78,6 +92,6 @@
     </dialog>
 
     <div class="toast" id="toast"></div>
-    <script src="/app.js?v=20260516-summary-links"></script>
+    <script src="/app.js?v=20260516-history-import"></script>
   </body>
 </html>

@@ -135,6 +135,33 @@ def migrate(conn: sqlite3.Connection) -> None:
           details TEXT NOT NULL DEFAULT '{}',
           created_at TEXT NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS electricity_annual_summary (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          account_id INTEGER NOT NULL,
+          year TEXT NOT NULL,
+          usage_value REAL,
+          amount REAL,
+          account_no TEXT,
+          raw_json TEXT NOT NULL DEFAULT '{}',
+          created_at TEXT NOT NULL,
+          UNIQUE(account_id, year),
+          FOREIGN KEY(account_id) REFERENCES accounts(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS electricity_bill_details (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          account_id INTEGER NOT NULL,
+          statement_month TEXT NOT NULL,
+          module TEXT NOT NULL,
+          item_name TEXT NOT NULL,
+          item_value TEXT,
+          unit TEXT,
+          raw_json TEXT NOT NULL DEFAULT '{}',
+          created_at TEXT NOT NULL,
+          UNIQUE(account_id, statement_month, module, item_name),
+          FOREIGN KEY(account_id) REFERENCES accounts(id)
+        );
         """
     )
     conn.commit()
@@ -467,6 +494,64 @@ def upsert_bill(conn: sqlite3.Connection, account_id: int, utility_type: str, bi
     return cur.rowcount > 0
 
 
+def upsert_bill_by_period(conn: sqlite3.Connection, account_id: int, utility_type: str, bill: dict) -> bool:
+    cur = conn.execute(
+        """
+        INSERT INTO bills
+          (utility_type, account_id, statement_date, period_start, period_end, usage_value,
+           usage_unit, amount, source_channel, record_type, status, raw_json, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(account_id, utility_type, statement_date, amount, source_channel)
+        DO UPDATE SET
+          period_start=excluded.period_start,
+          period_end=excluded.period_end,
+          usage_value=excluded.usage_value,
+          usage_unit=excluded.usage_unit,
+          record_type=excluded.record_type,
+          status=excluded.status,
+          raw_json=excluded.raw_json
+        """,
+        (
+            utility_type,
+            account_id,
+            bill.get("statementDate"),
+            bill.get("periodStart"),
+            bill.get("periodEnd"),
+            bill.get("usageValue"),
+            bill.get("usageUnit"),
+            float(bill.get("amount") or 0),
+            bill.get("sourceChannel") or utility_type,
+            bill.get("recordType") or "bill",
+            bill.get("status") or "confirmed",
+            json.dumps(bill.get("raw") or {}, ensure_ascii=False),
+            now_iso(),
+        ),
+    )
+    conn.execute(
+        """
+        DELETE FROM bills
+        WHERE account_id = ?
+          AND utility_type = ?
+          AND statement_date = ?
+          AND id NOT IN (
+            SELECT id FROM bills
+            WHERE account_id = ? AND utility_type = ? AND statement_date = ?
+            ORDER BY source_channel = 'sgcc_history_import' DESC, id DESC
+            LIMIT 1
+          )
+        """,
+        (
+            account_id,
+            utility_type,
+            bill.get("statementDate"),
+            account_id,
+            utility_type,
+            bill.get("statementDate"),
+        ),
+    )
+    return cur.rowcount > 0
+
+
 def upsert_daily(conn: sqlite3.Connection, account_id: int, utility_type: str, row: dict) -> bool:
     cur = conn.execute(
         """
@@ -483,6 +568,58 @@ def upsert_daily(conn: sqlite3.Connection, account_id: int, utility_type: str, r
             row.get("usageValue"),
             row.get("usageUnit"),
             row.get("amount"),
+            json.dumps(row.get("raw") or {}, ensure_ascii=False),
+            now_iso(),
+        ),
+    )
+    return cur.rowcount > 0
+
+
+def upsert_electricity_annual(conn: sqlite3.Connection, account_id: int, row: dict) -> bool:
+    cur = conn.execute(
+        """
+        INSERT INTO electricity_annual_summary
+          (account_id, year, usage_value, amount, account_no, raw_json, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(account_id, year)
+        DO UPDATE SET
+          usage_value=excluded.usage_value,
+          amount=excluded.amount,
+          account_no=excluded.account_no,
+          raw_json=excluded.raw_json
+        """,
+        (
+            account_id,
+            row.get("year"),
+            row.get("usageValue"),
+            row.get("amount"),
+            row.get("accountNo") or "",
+            json.dumps(row.get("raw") or {}, ensure_ascii=False),
+            now_iso(),
+        ),
+    )
+    return cur.rowcount > 0
+
+
+def upsert_electricity_bill_detail(conn: sqlite3.Connection, account_id: int, row: dict) -> bool:
+    cur = conn.execute(
+        """
+        INSERT INTO electricity_bill_details
+          (account_id, statement_month, module, item_name, item_value, unit, raw_json, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(account_id, statement_month, module, item_name)
+        DO UPDATE SET
+          item_value=excluded.item_value,
+          unit=excluded.unit,
+          raw_json=excluded.raw_json
+        """,
+        (
+            account_id,
+            row.get("statementMonth"),
+            row.get("module"),
+            row.get("itemName"),
+            row.get("itemValue"),
+            row.get("unit") or "",
             json.dumps(row.get("raw") or {}, ensure_ascii=False),
             now_iso(),
         ),

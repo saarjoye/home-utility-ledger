@@ -6,6 +6,7 @@ import os
 import secrets
 import threading
 import time
+import urllib.parse
 from datetime import datetime
 from http import cookies
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -13,6 +14,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from . import collectors
+from .history_import import normalize_history, parse_base64_xlsx, template_rows, write_xlsx
 from .db import (
     analytics,
     connect,
@@ -34,7 +36,10 @@ from .db import (
     update_account_test,
     update_settings,
     upsert_bill,
+    upsert_bill_by_period,
     upsert_daily,
+    upsert_electricity_annual,
+    upsert_electricity_bill_detail,
 )
 
 
@@ -229,6 +234,42 @@ def collection_log_details(result: dict, inserted: int, daily_count: int) -> dic
     }
 
 
+def import_electricity_history(conn, content_base64: str) -> dict:
+    account = get_account(conn, "electricity")
+    parsed = parse_base64_xlsx(content_base64)
+    normalized = normalize_history(parsed)
+    monthly_inserted = 0
+    daily_inserted = 0
+    annual_saved = 0
+    details_saved = 0
+
+    for bill in normalized["monthly"]:
+        monthly_inserted += 1 if upsert_bill_by_period(conn, account["id"], "electricity", bill) else 0
+    for row in normalized["daily"]:
+        daily_inserted += 1 if upsert_daily(conn, account["id"], "electricity", row) else 0
+    for row in normalized["annual"]:
+        annual_saved += 1 if upsert_electricity_annual(conn, account["id"], row) else 0
+    for row in normalized["details"]:
+        details_saved += 1 if upsert_electricity_bill_detail(conn, account["id"], row) else 0
+
+    summary = {
+        "monthlyReceived": len(normalized["monthly"]),
+        "monthlyInserted": monthly_inserted,
+        "dailyReceived": len(normalized["daily"]),
+        "dailyInserted": daily_inserted,
+        "annualReceived": len(normalized["annual"]),
+        "annualSaved": annual_saved,
+        "detailReceived": len(normalized["details"]),
+        "detailSaved": details_saved,
+        "sampleDaily": normalized["daily"][:8],
+        "sampleMonthly": normalized["monthly"][:8],
+        "sampleAnnual": normalized["annual"][:4],
+        "sampleDetails": normalized["details"][:12],
+    }
+    insert_log(conn, "info", "electricity-history-import", "国电历史数据导入完成", summary)
+    return summary
+
+
 def run_collect_for(conn, utility_type: str, trigger_type: str = "scheduled", force: bool = False) -> dict:
     existing_run = get_collection_run(conn, utility_type)
     if existing_run and not force:
@@ -310,6 +351,18 @@ class Handler(BaseHTTPRequestHandler):
     def redirect(self, location: str):
         self.respond(302, b"", headers={"Location": location})
 
+    def download(self, filename: str, body: bytes, content_type: str):
+        quoted = urllib.parse.quote(filename)
+        self.respond(
+            200,
+            body,
+            content_type,
+            {
+                "Content-Disposition": f"attachment; filename*=UTF-8''{quoted}",
+                "Cache-Control": "no-store",
+            },
+        )
+
     def see_other(self, location: str, headers=None):
         merged = {"Location": location}
         merged.update(headers or {})
@@ -349,7 +402,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/analytics":
             return self.redirect("/analytics.html")
         if path == "/healthz":
-            return self.json(200, {"ok": True, "app": "home-utility-ledger-standalone", "version": "standalone-2026.05.16-summary-links"})
+            return self.json(200, {"ok": True, "app": "home-utility-ledger-standalone", "version": "standalone-2026.05.16-history-import"})
         if path == "/api/me":
             return self.json(200, {"ok": True, "authenticated": self.authed()})
         if path == "/login.html":
@@ -384,6 +437,13 @@ class Handler(BaseHTTPRequestHandler):
                 return self.json(200, {"ok": True, "data": list_logs(conn, int((query.get("limit") or ["80"])[0] or 80))})
             finally:
                 conn.close()
+        if path == "/api/electricity/history-template.xlsx":
+            content = write_xlsx(template_rows(sample=True))
+            return self.download(
+                "国电历史数据导入模板.xlsx",
+                content,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
         if path == "/api/settings":
             conn = self.db()
             try:
@@ -483,6 +543,14 @@ class Handler(BaseHTTPRequestHandler):
                     return self.json(200, run_collect_for(conn, utility_type, "manual"))
                 except Exception as exc:
                     return self.json(400, {"ok": False, "message": user_message(utility_type, exc)})
+                finally:
+                    conn.close()
+            if path == "/api/import/electricity-history":
+                data = parse_json_body(self)
+                conn = self.db()
+                try:
+                    summary = import_electricity_history(conn, data.get("contentBase64") or "")
+                    return self.json(200, {"ok": True, "message": "国电历史数据已导入", "data": summary})
                 finally:
                     conn.close()
             if path == "/api/settings":

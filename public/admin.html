@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>后台接入管理 - 家庭能源账本</title>
-    <link rel="stylesheet" href="/styles.css?v=20260516-summary-links">
+    <link rel="stylesheet" href="/styles.css?v=20260516-history-import">
   </head>
   <body>
     <div class="admin-shell">
@@ -20,6 +20,7 @@
         <aside class="admin-menu">
           <h2>管理菜单</h2>
           <a class="active" href="#channels">渠道接入</a>
+          <a href="#electricityHistory">国电历史导入</a>
           <a href="#jobs">采集计划</a>
           <a href="#push">企业微信推送</a>
           <a href="#logs">采集日志</a>
@@ -29,6 +30,32 @@
           <div class="info-banner">授权信息有有效期。后台会显示最后授权时间和预计过期时间，过期后点击“重新授权”按提示导入即可。</div>
 
           <section id="channels" class="provider-grid"></section>
+
+          <section class="panel-card history-import-panel" id="electricityHistory">
+            <div class="panel-head">
+              <div>
+                <h2>国电历史数据导入</h2>
+                <p class="helper">用于补齐国网自动采集拿不到的历史数据。水费、燃气不受影响。</p>
+              </div>
+              <a class="btn secondary" href="/api/electricity/history-template.xlsx">下载模板</a>
+            </div>
+            <div class="history-import-grid">
+              <label class="upload-card">
+                <strong>选择 Excel 文件</strong>
+                <span>支持系统模板的 .xlsx 文件，包含日用电、月账单、年度汇总、账单详情。</span>
+                <input id="electricityHistoryFile" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+              </label>
+              <div class="history-sheet-list">
+                <b>模板内容</b>
+                <span>日用电：日期、用电量、峰谷平尖</span>
+                <span>月账单：账期、用电量、电费</span>
+                <span>年度汇总：年度用量、年度费用</span>
+                <span>账单详情：账单信息、本月电费、分时用电、阶梯电量</span>
+              </div>
+            </div>
+            <button class="btn save-wide" id="importElectricityHistory" type="button">导入国电历史数据</button>
+            <div class="history-import-result" id="electricityHistoryResult"></div>
+          </section>
 
           <section class="admin-bottom">
             <div class="panel-card">
@@ -96,6 +123,6 @@
     </dialog>
 
     <div class="toast" id="toast"></div>
-    <script src="/app.js?v=20260516-summary-links"></script>
+    <script src="/app.js?v=20260516-history-import"></script>
   </body>
 </html>

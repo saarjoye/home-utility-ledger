@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>家庭能源账本</title>
-    <link rel="stylesheet" href="/styles.css?v=20260516-logdetail">
+    <link rel="stylesheet" href="/styles.css?v=20260516-responsive-tabs">
   </head>
   <body>
     <div class="app-shell">
@@ -13,12 +13,6 @@
           <span class="brand-icon">↯</span>
           <span><strong>家庭能源账本</strong><small>水 · 电 · 燃自动采集与费用分析</small></span>
         </a>
-        <nav class="pill-nav">
-          <a class="active" href="/index.html">总览</a>
-          <a href="/analytics.html?type=electricity">电费详情</a>
-          <a href="/analytics.html?type=water">水费详情</a>
-          <a href="/analytics.html?type=gas">燃气详情</a>
-        </nav>
         <a class="btn secondary header-btn" href="/admin.html">后台管理</a>
       </header>
 
@@ -45,6 +39,17 @@
               <button class="soft-action" id="collectAll">立即采集全部渠道 <span>↻</span></button>
               <a class="soft-action warn" href="/admin.html">查看需要重新授权账号 <span>盾</span></a>
             </div>
+          </section>
+
+          <section class="panel-card channel-switch-card">
+            <h2>数据视图</h2>
+            <p class="helper">选择后右侧内容会切换为对应平台数据。</p>
+            <nav class="side-channel-nav" id="dashboardViewTabs" aria-label="数据视图">
+              <button class="active" type="button" data-view="overview"><span>总览</span><small>三项汇总</small></button>
+              <button type="button" data-view="electricity"><span>电费详情</span><small>日用电 · 月账单</small></button>
+              <button type="button" data-view="water"><span>水费详情</span><small>账期 · 用水量</small></button>
+              <button type="button" data-view="gas"><span>燃气详情</span><small>账期 · 用气量</small></button>
+            </nav>
           </section>
         </aside>
 
@@ -74,16 +79,17 @@
           <section class="main-panels">
             <div class="panel-card usage-panel">
               <div class="panel-head">
-                <h2>电费用量日历</h2>
+                <h2 id="mainDataTitle">电费用量日历</h2>
                 <span id="calendarMonth">--</span>
               </div>
-              <div class="weekday-row"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
+              <p class="helper data-note" id="mainDataNote">日历展示已落盘的日用电量；单日费用通常需要等待国网月账单出账。</p>
+              <div class="weekday-row" id="desktopWeekdays"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
               <div class="calendar-grid" id="electricCalendar"></div>
             </div>
 
             <div class="panel-card details-panel">
               <div class="panel-head">
-                <h2>分渠道详细账单</h2>
+                <h2 id="billPanelTitle">电费详细账单</h2>
               </div>
               <div class="mini-tabs" id="billTypeTabs">
                 <button class="active" data-type="electricity">电</button>
@@ -117,6 +123,6 @@
     </dialog>
 
     <div class="toast" id="toast"></div>
-    <script src="/app.js?v=20260516-logdetail"></script>
+    <script src="/app.js?v=20260516-responsive-tabs"></script>
   </body>
 </html>

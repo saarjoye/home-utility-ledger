@@ -11,6 +11,7 @@ const state = {
   start: "",
   end: "",
   billType: "electricity",
+  dashboardView: "overview",
   overview: null,
 };
 
@@ -194,6 +195,7 @@ async function initDashboard() {
   if (!document.querySelector(".dashboard-grid")) return;
   state.overview = await api("/api/overview");
   renderDashboard(state.overview);
+  bindDashboardViewTabs(state.overview);
   wireRangeTabs("#rangeTabs", () => renderDashboard(state.overview));
   document.querySelector("#prevRange").onclick = () => showToast("当前版本先按已落盘数据筛选，上一周期快捷切换稍后开放。");
   document.querySelector("#nextRange").onclick = () => showToast("当前版本先按已落盘数据筛选，下一周期快捷切换稍后开放。");
@@ -217,9 +219,7 @@ function renderDashboard(data) {
 
   renderSideStatus(accounts);
   renderSummaryCards(summary);
-  renderCalendar(data.dailyUsage || []);
-  renderBillGroups(data.billsByType || {});
-  renderTrend("electricity", data);
+  renderDashboardMainPanel(data);
   bindBillTabs(data);
 }
 
@@ -240,22 +240,48 @@ function amountLabel(item = {}) {
   return item.amount === null || item.amount === undefined ? "待出账" : fmt(item.amount);
 }
 
+function usageLabel(item = {}, type = "electricity") {
+  return `${fmt(item.usage)} ${units[type]}`;
+}
+
+function billDateLabel(item = {}) {
+  return item.statementDate ? String(item.statementDate).slice(0, 7) : "--";
+}
+
+function setDashboardView(view, data = state.overview) {
+  state.dashboardView = view || "overview";
+  state.billType = state.dashboardView === "overview" ? "electricity" : state.dashboardView;
+  document.querySelectorAll("#dashboardViewTabs button").forEach((btn) => btn.classList.toggle("active", btn.dataset.view === state.dashboardView));
+  document.querySelectorAll("#billTypeTabs button").forEach((btn) => btn.classList.toggle("active", btn.dataset.type === state.billType));
+  if (data) renderDashboard(data);
+}
+
+function bindDashboardViewTabs(data) {
+  document.querySelectorAll("#dashboardViewTabs button").forEach((btn) => {
+    btn.onclick = () => setDashboardView(btn.dataset.view, data);
+  });
+}
+
 function renderSummaryCards(summary) {
   const root = document.querySelector("#summaryCards");
   root.innerHTML = ["electricity", "water", "gas"].map((type) => {
     const item = summary[type] || {};
-    const action = type === "electricity" ? "进入电费详情" : type === "water" ? "进入水费详情" : "进入燃气详情";
+    const active = state.dashboardView === type ? "active" : "";
+    const action = state.dashboardView === type ? "正在查看" : "切换查看";
     const badge = type === "electricity" ? `最新 ${item.statementDate || "--"}` : `账期 ${String(item.statementDate || "--").slice(0, 7)}`;
     const amountHint = type === "electricity" && item.amount === null && item.usage
       ? "日用电已获取，电费金额待月账单出账"
       : item.statementDate || "暂无账单";
-    return `<article class="utility-card ${type}">
+    return `<article class="utility-card ${type} ${active}" data-card-type="${type}">
       <div class="utility-head"><h2>${names[type]}</h2><span>${badge}</span></div>
       <strong>${money(item.amount)}</strong>
       <p>${type === "electricity" ? "本月" : "本期"} ${fmt(item.usage)} ${units[type]} · ${amountHint}</p>
-      <a class="btn" href="/analytics.html?type=${type}">${action}</a>
+      <button class="btn card-view-btn" type="button" data-view="${type}">${action}</button>
     </article>`;
   }).join("");
+  root.querySelectorAll(".card-view-btn").forEach((btn) => {
+    btn.onclick = () => setDashboardView(btn.dataset.view, state.overview);
+  });
 }
 
 function renderCalendar(rows) {
@@ -293,11 +319,61 @@ function bindBillTabs(data) {
   document.querySelectorAll("#billTypeTabs button").forEach((btn) => {
     btn.onclick = () => {
       state.billType = btn.dataset.type;
+      state.dashboardView = btn.dataset.type;
+      document.querySelectorAll("#dashboardViewTabs button").forEach((item) => item.classList.toggle("active", item.dataset.view === state.dashboardView));
       document.querySelectorAll("#billTypeTabs button").forEach((item) => item.classList.toggle("active", item === btn));
-      renderBillGroups(data.billsByType || {});
-      renderTrend(state.billType, data);
+      renderDashboard(data);
     };
   });
+}
+
+function renderDashboardMainPanel(data) {
+  const view = state.dashboardView || "overview";
+  const type = view === "overview" ? "electricity" : view;
+  state.billType = type;
+  document.querySelectorAll("#billTypeTabs button").forEach((btn) => btn.classList.toggle("active", btn.dataset.type === type));
+  renderMainDataPanel(type, data);
+  renderBillGroups(data.billsByType || {});
+  renderTrend(type, data);
+}
+
+function renderMainDataPanel(type, data) {
+  const title = document.querySelector("#mainDataTitle");
+  const note = document.querySelector("#mainDataNote");
+  const weekdays = document.querySelector("#desktopWeekdays");
+  const calendarMonth = document.querySelector("#calendarMonth");
+  const billTitle = document.querySelector("#billPanelTitle");
+  if (billTitle) billTitle.textContent = `${names[type]}详细账单`;
+  if (type === "electricity") {
+    if (title) title.textContent = "电费用量日历";
+    if (note) note.textContent = "日历展示已落盘的日用电量；单日费用通常需要等待国网月账单出账。";
+    if (weekdays) weekdays.hidden = false;
+    renderCalendar(data.dailyUsage || []);
+    return;
+  }
+  const summary = (data.latestSummary || {})[type] || {};
+  const rows = ((data.billsByType || {})[type] || []).slice(0, 6);
+  if (title) title.textContent = `${names[type]}账期概览`;
+  if (calendarMonth) calendarMonth.textContent = `${billDateLabel(summary)} 账期`;
+  if (note) note.textContent = `${names[type]}当前按官方账期账单统计，稳定渠道暂未提供每日明细。`;
+  if (weekdays) weekdays.hidden = true;
+  const root = document.querySelector("#electricCalendar");
+  if (!root) return;
+  root.innerHTML = `<div class="period-overview-card ${type}">
+    <div class="period-hero">
+      <span>当前账期费用</span>
+      <strong>${money(summary.amount)}</strong>
+      <p>${billDateLabel(summary)} · ${usageLabel(summary, type)}</p>
+    </div>
+    <div class="period-stat-grid">
+      <div><b>账单条数</b><strong>${rows.length}</strong></div>
+      <div><b>统计用量</b><strong>${usageLabel(summary, type)}</strong></div>
+      <div><b>最新账期</b><strong>${billDateLabel(summary)}</strong></div>
+    </div>
+    <div class="period-row-list">
+      ${rows.map((item) => `<div class="period-row"><span>${item.statement_date}</span><b>${fmt(item.usage_value)} ${item.usage_unit || units[type]}</b><strong>${money(item.amount)}</strong></div>`).join("") || `<p class="helper">暂无${names[type]}账期账单</p>`}
+    </div>
+  </div>`;
 }
 
 function renderBillGroups(groups) {

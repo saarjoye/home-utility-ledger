@@ -3,45 +3,81 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>统计分析 - 家庭账单</title>
-    <link rel="stylesheet" href="/styles.css">
+    <title>费用详情 - 家庭能源账本</title>
+    <link rel="stylesheet" href="/styles.css?v=20260516-ui">
   </head>
   <body>
-    <div class="layout">
-      <aside class="sidebar">
-        <div class="brand">家庭账单</div>
-        <nav class="nav">
-          <a href="/index.html">账单看板</a>
-          <a class="active" href="/analytics.html">统计分析</a>
-          <a href="/admin.html">后台配置</a>
-        </nav>
-      </aside>
-      <main class="main">
-        <div class="topbar">
-          <div>
-            <h1>费用统计</h1>
-            <p class="sub">支持日、月、季、年、自定义时间段统计，并按电水燃拆分。</p>
-          </div>
+    <div class="mobile-detail">
+      <header class="detail-header">
+        <a href="/index.html">‹</a>
+        <h1 id="detailTitle">费用信息</h1>
+        <span>•••</span>
+      </header>
+
+      <section class="detail-hero" id="detailHero">
+        <div class="kv-row"><span>刷新时间</span><b id="detailRefresh">--</b></div>
+        <div class="kv-row"><span>当前账期</span><b id="detailPeriod">--</b></div>
+        <div class="hero-amount"><span id="detailAmountLabel">本期费用</span><strong id="detailAmount">¥ 0.00</strong></div>
+      </section>
+
+      <section class="detail-card">
+        <div class="panel-head">
+          <h2>统计范围</h2>
+          <span id="detailRangeLabel">--</span>
         </div>
-        <div class="tabs">
+        <div class="range-tabs mobile" id="detailRangeTabs">
           <button data-period="day">日</button>
+          <button data-period="week">周</button>
           <button data-period="month" class="active">月</button>
           <button data-period="quarter">季</button>
           <button data-period="year">年</button>
+          <button data-period="custom">自定义</button>
         </div>
-        <section class="grid-2">
-          <div class="card chart-card">
-            <h2>费用走势</h2>
-            <div class="bars" id="analyticsBars"></div>
-          </div>
-          <div class="card">
-            <h2>渠道拆分</h2>
-            <div class="list" id="analyticsRows" style="margin-top:14px"></div>
-          </div>
-        </section>
-      </main>
+      </section>
+
+      <section class="detail-metrics" id="detailMetrics"></section>
+
+      <section class="detail-card" id="detailCalendarCard">
+        <div class="panel-head">
+          <h2>用电日历</h2>
+          <span id="detailCalendarMonth">--</span>
+        </div>
+        <div class="weekday-row"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
+        <div class="calendar-grid mobile-calendar" id="detailCalendar"></div>
+      </section>
+
+      <section class="detail-card" id="periodInfoCard">
+        <h2 id="periodInfoTitle">账期明细</h2>
+        <div class="info-list" id="periodInfo"></div>
+      </section>
+
+      <section class="detail-card">
+        <h2 id="detailTrendTitle">近期趋势</h2>
+        <div class="bars compact detail-bars" id="analyticsBars"></div>
+      </section>
+
+      <section class="detail-card">
+        <h2 id="detailBillTitle">账单列表</h2>
+        <div class="bill-list" id="analyticsRows"></div>
+      </section>
     </div>
+
+    <dialog class="range-dialog" id="rangeDialog">
+      <form method="dialog" class="dialog-card">
+        <button class="dialog-close" value="cancel">×</button>
+        <h2>选择自定义时间</h2>
+        <p class="helper">用于总览统计、详情趋势和账单列表。水费/燃气按账期归属统计，电费按日用电记录统计。</p>
+        <label>开始日期<input class="input" id="customStart" type="date"></label>
+        <label>结束日期<input class="input" id="customEnd" type="date"></label>
+        <div class="notice-line">自定义范围最大支持 2 年，避免接口与页面加载过慢。</div>
+        <div class="dialog-actions">
+          <button class="btn secondary" value="cancel">取消</button>
+          <button class="btn" id="applyCustomRange" value="default">应用筛选</button>
+        </div>
+      </form>
+    </dialog>
+
     <div class="toast" id="toast"></div>
-    <script src="/app.js"></script>
+    <script src="/app.js?v=20260516-ui"></script>
   </body>
 </html>

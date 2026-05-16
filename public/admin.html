@@ -3,79 +3,90 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>后台配置 - 家庭账单</title>
-    <link rel="stylesheet" href="/styles.css">
+    <title>后台接入管理 - 家庭能源账本</title>
+    <link rel="stylesheet" href="/styles.css?v=20260516-ui">
   </head>
   <body>
-    <div class="layout">
-      <aside class="sidebar">
-        <div class="brand">家庭账单 <small>Standalone</small></div>
-        <nav class="nav">
-          <a href="/index.html">账单看板</a>
-          <a href="/analytics.html">统计分析</a>
-          <a class="active" href="/admin.html">后台配置</a>
-        </nav>
-      </aside>
-      <main class="main">
-        <div class="topbar">
-          <div>
-            <h1>后台配置</h1>
-            <p class="sub">新版 Standalone 2026.05.15.14 · 配置采集来源、定时任务和企业微信推送。每个渠道只保留必要操作。</p>
-          </div>
-          <button class="btn" id="saveSettings">保存配置</button>
+    <div class="admin-shell">
+      <header class="admin-header">
+        <div>
+          <h1>后台接入管理</h1>
+          <p>只保留每个渠道必要配置：账号、授权状态、重新导入、测试采集。</p>
         </div>
-        <section class="grid-2">
-          <div>
-            <h2 style="margin-bottom:14px">账号接入</h2>
-            <div class="list" id="providerCards"></div>
-          </div>
-          <div class="list">
-            <div class="card">
-              <h2>自动采集</h2>
-              <div class="form-grid" id="jobsForm" style="margin-top:14px"></div>
-              <p class="helper" style="margin-top:12px">失败后自动记录日志；连续失败时按推送配置提醒。</p>
+        <a class="btn" href="/index.html">返回前台</a>
+      </header>
+
+      <main class="admin-grid">
+        <aside class="admin-menu">
+          <h2>管理菜单</h2>
+          <a class="active" href="#channels">渠道接入</a>
+          <a href="#jobs">采集计划</a>
+          <a href="#push">企业微信推送</a>
+          <a href="#security">登录安全</a>
+        </aside>
+
+        <section class="admin-content">
+          <div class="info-banner">授权信息有有效期。后台会显示最后授权时间和预计过期时间，过期后点击“重新授权”按提示导入即可。</div>
+
+          <section id="channels" class="provider-grid"></section>
+
+          <section class="admin-bottom">
+            <div class="panel-card">
+              <h2>重新授权流程</h2>
+              <ol class="step-list">
+                <li><span>1</span>打开对应官方页面或小程序账单页并完成登录</li>
+                <li><span>2</span>按后台提示导出登录信息或上传抓包文件</li>
+                <li><span>3</span>系统自动识别账号并保存，随后执行测试采集</li>
+              </ol>
             </div>
-            <div class="card">
+
+            <div class="panel-card" id="jobs">
+              <h2>采集计划</h2>
+              <div class="form-grid" id="jobsForm"></div>
+              <p class="helper">建议每天只采集一次。国网登录次数有限，系统会记录当天采集状态并避免重复登录。</p>
+            </div>
+
+            <div class="panel-card" id="push">
               <h2>企业微信推送</h2>
-              <div class="form-grid" style="margin-top:14px">
+              <div class="form-grid">
                 <label>Webhook 地址<input class="input" id="wecomWebhook" placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/..."></label>
                 <label><input type="checkbox" id="pushDaily"> 每日汇总</label>
                 <label><input type="checkbox" id="pushFailure"> 采集失败提醒</label>
               </div>
+              <button class="btn save-wide" id="saveSettings">保存配置</button>
             </div>
-            <div class="card">
-              <h2>接入向导</h2>
-              <p class="helper" style="margin-top:14px">1. 选择渠道。<br>2. 按提示完成登录或打开账单页。<br>3. 导入系统生成的登录信息或抓包文件。<br>4. 点击测试连接。<br>5. 保存后进入自动采集。</p>
-            </div>
-          </div>
+          </section>
         </section>
       </main>
     </div>
-    <dialog id="importDialog" style="width:min(760px, 92vw); border:0; border-radius:24px; padding:0">
-      <form method="dialog" class="card" style="box-shadow:none">
+
+    <dialog id="importDialog" class="import-dialog">
+      <form method="dialog" class="dialog-card">
+        <button class="dialog-close" value="cancel">×</button>
         <h2 id="dialogTitle">导入</h2>
-        <p class="helper" id="dialogHelp" style="margin:10px 0 14px"></p>
+        <p class="helper" id="dialogHelp"></p>
         <div id="credentialBox" class="form-grid" hidden>
           <label>国网账号<input class="input" id="sgccUsername" autocomplete="username" placeholder="手机号或国网账号"></label>
           <label>国网密码<input class="input" id="sgccPassword" autocomplete="current-password" type="password" placeholder="登录密码"></label>
-          <p class="helper">保存后，采集时会在 Docker 容器内自动打开国网页面登录并读取账单。</p>
+          <p class="helper">系统会在每日采集任务中自动登录一次并落盘账单，避免频繁触发风控。</p>
         </div>
         <div id="scriptBox" class="script-box" hidden>
           <div class="script-box-head">
-            <strong>浏览器控制台脚本</strong>
+            <strong>备用导入脚本</strong>
             <button class="btn secondary" id="copyScript" type="button">复制脚本</button>
           </div>
           <textarea id="scriptContent" readonly></textarea>
-          <p class="helper">复制脚本到国网页面控制台执行。执行后通常会自动复制 JSON；如果没有自动复制，请复制控制台里打印出的完整 JSON。</p>
+          <p class="helper">复制到已登录国网页面控制台执行，然后粘贴输出内容。</p>
         </div>
-        <textarea id="importContent" placeholder="粘贴导出内容，或粘贴完整 HAR JSON"></textarea>
-        <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:14px">
+        <textarea id="importContent" placeholder="粘贴授权内容或完整 HAR JSON"></textarea>
+        <div class="dialog-actions">
           <button class="btn secondary" value="cancel">取消</button>
-          <button class="btn" id="confirmImport" value="default">导入</button>
+          <button class="btn" id="confirmImport" value="default">保存</button>
         </div>
       </form>
     </dialog>
+
     <div class="toast" id="toast"></div>
-    <script src="/app.js"></script>
+    <script src="/app.js?v=20260516-ui"></script>
   </body>
 </html>

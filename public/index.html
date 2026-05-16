@@ -1,50 +1,122 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="zh-CN">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>家庭账单看板</title>
-    <link rel="stylesheet" href="/styles.css">
+    <title>家庭能源账本</title>
+    <link rel="stylesheet" href="/styles.css?v=20260516-ui">
   </head>
   <body>
-    <div class="layout">
-      <aside class="sidebar">
-        <div class="brand">家庭账单 <small>Standalone</small></div>
-        <nav class="nav">
-          <a class="active" href="/index.html">账单看板</a>
-          <a href="/analytics.html">统计分析</a>
-          <a href="/admin.html">后台配置</a>
+    <div class="app-shell">
+      <header class="app-header">
+        <a class="brand-lockup" href="/index.html">
+          <span class="brand-icon">↯</span>
+          <span><strong>家庭能源账本</strong><small>水 · 电 · 燃自动采集与费用分析</small></span>
+        </a>
+        <nav class="pill-nav">
+          <a class="active" href="/index.html">总览</a>
+          <a href="/analytics.html?type=electricity">电费详情</a>
+          <a href="/analytics.html?type=water">水费详情</a>
+          <a href="/analytics.html?type=gas">燃气详情</a>
         </nav>
-        <div class="side-status" id="sideStatus">正在读取采集状态...</div>
-      </aside>
-      <main class="main">
-        <div class="topbar">
-          <div>
-            <h1>家庭能源账单</h1>
-            <p class="sub" id="updatedAt">展示最近一次成功采集并落盘的本地数据</p>
-          </div>
-          <button class="btn" id="collectAll">今日采集</button>
-        </div>
-        <section class="grid-4" id="summaryCards"></section>
-        <section class="grid-2" style="margin-top:18px">
-          <div class="card chart-card">
-            <h2>费用趋势</h2>
-            <div class="bars" id="bars"></div>
-          </div>
-          <div class="list">
-            <div class="card">
-              <h2>采集状态</h2>
-              <div class="list" id="accountStatus" style="margin-top:14px"></div>
+        <a class="btn secondary header-btn" href="/admin.html">后台管理</a>
+      </header>
+
+      <main class="dashboard-grid">
+        <aside class="left-rail">
+          <section class="total-card">
+            <p>本月费用概览</p>
+            <strong id="monthTotal">¥ 0.00</strong>
+            <span id="monthBreakdown">电 0.00 · 水 0.00 · 燃 0.00</span>
+            <div class="total-meta">
+              <b id="connectedCount">0 个渠道已接入</b>
+              <span id="lastCollect">最后采集 --</span>
             </div>
-            <div class="card">
-              <h2>分渠道账单</h2>
-              <div class="list" id="recentBills" style="margin-top:14px"></div>
+          </section>
+
+          <section class="panel-card">
+            <h2>采集状态</h2>
+            <div class="status-list" id="sideStatus">正在读取采集状态...</div>
+          </section>
+
+          <section class="panel-card">
+            <h2>快捷操作</h2>
+            <div class="quick-actions">
+              <button class="soft-action" id="collectAll">立即采集全部渠道 <span>↻</span></button>
+              <a class="soft-action warn" href="/admin.html">查看需要重新授权账号 <span>盾</span></a>
             </div>
-          </div>
+          </section>
+        </aside>
+
+        <section class="content-area">
+          <section class="range-card">
+            <div>
+              <h2>统计时间</h2>
+              <p id="rangeText">当前：本月</p>
+            </div>
+            <div class="range-tabs" id="rangeTabs">
+              <button data-period="day">日</button>
+              <button data-period="week">周</button>
+              <button data-period="month" class="active">月</button>
+              <button data-period="quarter">季</button>
+              <button data-period="year">年</button>
+              <button data-period="custom">自定义</button>
+            </div>
+            <div class="range-switch">
+              <button id="prevRange" type="button">‹</button>
+              <strong id="rangeLabel">--</strong>
+              <button id="nextRange" type="button">›</button>
+            </div>
+          </section>
+
+          <section class="utility-cards" id="summaryCards"></section>
+
+          <section class="main-panels">
+            <div class="panel-card usage-panel">
+              <div class="panel-head">
+                <h2>电费用量日历</h2>
+                <span id="calendarMonth">--</span>
+              </div>
+              <div class="weekday-row"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
+              <div class="calendar-grid" id="electricCalendar"></div>
+            </div>
+
+            <div class="panel-card details-panel">
+              <div class="panel-head">
+                <h2>分渠道详细账单</h2>
+              </div>
+              <div class="mini-tabs" id="billTypeTabs">
+                <button class="active" data-type="electricity">电</button>
+                <button data-type="water">水</button>
+                <button data-type="gas">燃</button>
+              </div>
+              <div class="trend-card">
+                <h3 id="trendTitle">近 7 日用电趋势</h3>
+                <div class="bars compact" id="bars"></div>
+              </div>
+              <div class="bill-list" id="recentBills"></div>
+            </div>
+          </section>
         </section>
       </main>
     </div>
+
+    <dialog class="range-dialog" id="rangeDialog">
+      <form method="dialog" class="dialog-card">
+        <button class="dialog-close" value="cancel">×</button>
+        <h2>选择自定义时间</h2>
+        <p class="helper">用于总览统计、详情趋势和账单列表。水费/燃气按账期归属统计，电费按日用电记录统计。</p>
+        <label>开始日期<input class="input" id="customStart" type="date"></label>
+        <label>结束日期<input class="input" id="customEnd" type="date"></label>
+        <div class="notice-line">自定义范围最大支持 2 年，避免接口与页面加载过慢。</div>
+        <div class="dialog-actions">
+          <button class="btn secondary" value="cancel">取消</button>
+          <button class="btn" id="applyCustomRange" value="default">应用筛选</button>
+        </div>
+      </form>
+    </dialog>
+
     <div class="toast" id="toast"></div>
-    <script src="/app.js"></script>
+    <script src="/app.js?v=20260516-ui"></script>
   </body>
 </html>

@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>家庭能源账本</title>
-    <link rel="stylesheet" href="/styles.css?v=20260516-detail-all-bills">
+    <link rel="stylesheet" href="/styles.css?v=20260516-summary-links">
   </head>
   <body>
     <div class="app-shell">
@@ -54,6 +54,8 @@
         </aside>
 
         <section class="content-area">
+          <section class="utility-cards" id="summaryCards"></section>
+
           <section class="range-card">
             <div>
               <h2>统计时间</h2>
@@ -73,8 +75,6 @@
               <button id="nextRange" type="button">›</button>
             </div>
           </section>
-
-          <section class="utility-cards" id="summaryCards"></section>
 
           <section class="main-panels">
             <div class="panel-card usage-panel">
@@ -123,7 +123,6 @@
     </dialog>
 
     <div class="toast" id="toast"></div>
-    <script src="/app.js?v=20260516-detail-all-bills"></script>
+    <script src="/app.js?v=20260516-summary-links"></script>
   </body>
 </html>
-

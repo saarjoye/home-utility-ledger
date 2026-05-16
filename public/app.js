@@ -19,6 +19,7 @@ if (["water", "gas"].includes(state.detailType) && !new URLSearchParams(location
   state.period = "all";
 }
 
+
 function showToast(message) {
   if (!toast) return;
   toast.textContent = message;
@@ -272,20 +273,30 @@ function renderSummaryCards(summary) {
   root.innerHTML = ["electricity", "water", "gas"].map((type) => {
     const item = summary[type] || {};
     const active = state.dashboardView === type ? "active" : "";
-    const action = state.dashboardView === type ? "正在查看" : "切换查看";
+    const action = state.dashboardView === type ? "查看全部数据" : "进入详情";
     const badge = type === "electricity" ? `最新 ${item.statementDate || "--"}` : `账期 ${String(item.statementDate || "--").slice(0, 7)}`;
     const amountHint = type === "electricity" && item.amount === null && item.usage
       ? "日用电已获取，电费金额待月账单出账"
       : item.statementDate || "暂无账单";
-    return `<article class="utility-card ${type} ${active}" data-card-type="${type}">
+    const detailHref = `/analytics.html?type=${type}${type === "electricity" ? "" : "&period=all"}`;
+    return `<article class="utility-card ${type} ${active}" data-card-type="${type}" data-href="${detailHref}" tabindex="0" role="link">
       <div class="utility-head"><h2>${names[type]}</h2><span>${badge}</span></div>
       <strong>${money(item.amount)}</strong>
       <p>${type === "electricity" ? "本月" : "本期"} ${fmt(item.usage)} ${units[type]} · ${amountHint}</p>
-      <button class="btn card-view-btn" type="button" data-view="${type}">${action}</button>
+      <a class="btn card-detail-link" href="${detailHref}">${action}</a>
     </article>`;
   }).join("");
-  root.querySelectorAll(".card-view-btn").forEach((btn) => {
-    btn.onclick = () => setDashboardView(btn.dataset.view, state.overview);
+  root.querySelectorAll(".utility-card[data-href]").forEach((card) => {
+    card.onclick = (event) => {
+      if (event.target.closest("a")) return;
+      location.href = card.dataset.href;
+    };
+    card.onkeydown = (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        location.href = card.dataset.href;
+      }
+    };
   });
 }
 
@@ -424,6 +435,8 @@ async function collectAll() {
 
 async function initDetail() {
   if (!document.querySelector(".mobile-detail")) return;
+  const period = new URLSearchParams(location.search).get("period");
+  if (period) state.period = period;
   const data = await api("/api/overview");
   state.overview = data;
   syncDetailRangeTabs();

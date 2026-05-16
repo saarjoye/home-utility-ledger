@@ -55,6 +55,11 @@
       <form method="dialog" class="card" style="box-shadow:none">
         <h2 id="dialogTitle">导入</h2>
         <p class="helper" id="dialogHelp" style="margin:10px 0 14px"></p>
+        <div id="credentialBox" class="form-grid" hidden>
+          <label>国网账号<input class="input" id="sgccUsername" autocomplete="username" placeholder="手机号或国网账号"></label>
+          <label>国网密码<input class="input" id="sgccPassword" autocomplete="current-password" type="password" placeholder="登录密码"></label>
+          <p class="helper">保存后，采集时会在 Docker 容器内自动打开国网页面登录并读取账单。</p>
+        </div>
         <div id="scriptBox" class="script-box" hidden>
           <div class="script-box-head">
             <strong>浏览器控制台脚本</strong>

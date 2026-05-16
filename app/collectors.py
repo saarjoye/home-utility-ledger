@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import time
 from datetime import datetime, timedelta
@@ -184,6 +185,23 @@ def import_sgcc_state(text) -> dict:
     if missing:
         raise ValueError(f"国网登录状态缺少必要字段：{', '.join(missing)}")
     return payload
+
+
+def import_sgcc_credentials(data) -> dict:
+    if not isinstance(data, dict):
+        data = load_json_text(data)
+    if not isinstance(data, dict):
+        raise ValueError("国网账号信息格式不正确")
+    username = clean(data.get("username") or data.get("account") or data.get("phone"))
+    password = clean(data.get("password"))
+    if not username or not password:
+        raise ValueError("请填写国网账号和密码")
+    return {
+        "mode": "web_login",
+        "username": username,
+        "password": password,
+        "displayAccount": username,
+    }
 
 
 def merge_sgcc_request_templates(getter_hits: dict, source: dict) -> None:
@@ -399,6 +417,18 @@ def sgcc_post(api_path: str, auth: dict, payload: dict) -> dict:
 
 
 def collect_sgcc(payload: dict) -> dict:
+    if payload.get("mode") == "web_login":
+        from .sgcc_api import SgccApiCollector
+
+        username = clean(payload.get("username"))
+        password = clean(payload.get("password"))
+        if not username or not password:
+            raise RuntimeError("国网账号或密码缺失，请在后台重新保存")
+        return SgccApiCollector(
+            username=username,
+            password=password,
+            daily_days=int(os.environ.get("SGCC_DAILY_DAYS", "7")),
+        ).collect()
     auth = sgcc_auth(payload)
     month_result = sgcc_post("/osg-open-bc0001/member/c01/f02", auth, sgcc_month_payload(auth["monthTemplate"]))
     daily_result = sgcc_post("/osg-web0004/member/c24/f01", auth, auth["dailyTemplate"])

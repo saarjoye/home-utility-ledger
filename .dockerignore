@@ -10,3 +10,17 @@ _sgcc_*.js
 sgcc-auth-live.json
 sgcc_live_fetch_test.py
 账号密码.txt
+agent.md
+scripts
+_external_sgcc_electricity_new
+scripts/
+design-exports/
+_external*/
+_yuheng*
+_sgcc_*.png
+_sgcc_*.json
+app/sgcc_captcha.onnx
+app/sgcc_web.py
+账号密码.txt
+tmp_*
+_external*

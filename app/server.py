@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import hashlib
 import json
@@ -18,13 +18,17 @@ from .db import (
     connect,
     create_session,
     delete_session,
+    finish_collection_run,
     get_account,
+    get_collection_run,
     get_session,
     get_settings,
     insert_log,
     list_accounts,
+    local_data_status,
     mark_collected,
     overview,
+    start_collection_run,
     update_account_session,
     update_account_test,
     update_settings,
@@ -100,7 +104,7 @@ def user_message(utility_type: str, exc: Exception) -> str:
     raw = str(exc) or exc.__class__.__name__
     if utility_type == "electricity":
         if any(marker in raw for marker in INTERNAL_ERROR_MARKERS) or "模板" in raw or "登录状态" in raw:
-            return "国网授权已失效或页面状态不完整。请重新登录国网电费账单页，然后在后台重新导入。"
+            return "国网授权已失效或页面状态不完整。请等待次日自动采集，或重新导入授权后再试。"
         return raw if len(raw) <= 120 else "国网采集失败，请重新导入登录信息后再试。"
     if any(marker in raw for marker in ("Traceback", "KeyError", "TypeError", "ValueError")):
         return "采集失败，登录信息可能已失效，请重新导入后再试。"
@@ -114,24 +118,60 @@ def generic_user_message(exc: Exception) -> str:
     return raw if len(raw) <= 160 else "操作失败，请检查导入内容后重试。"
 
 
-def run_collect_for(conn, utility_type: str) -> dict:
+def local_check_for(conn, utility_type: str) -> dict:
+    account = get_account(conn, utility_type)
+    status = local_data_status(conn, utility_type)
+    if not account["session_payload"]:
+        return {"ok": False, "message": "该渠道尚未接入，请先完成账号或授权导入。", "local": status}
+    if not status["billCount"] and not status["dailyCount"]:
+        return {
+            "ok": True,
+            "message": "账号已保存，但本地还没有落盘账单。请等待每日自动采集，或确认不会触发风控后手动采集一次。",
+            "local": status,
+        }
+    return {
+        "ok": True,
+        "message": "本地数据可用，页面将读取已落盘账单，不会触发重新登录。",
+        "local": status,
+    }
+
+
+def run_collect_for(conn, utility_type: str, trigger_type: str = "scheduled", force: bool = False) -> dict:
+    existing_run = get_collection_run(conn, utility_type)
+    if existing_run and not force:
+        return {
+            "ok": True,
+            "skipped": True,
+            "message": existing_run.get("message") or "今日已执行过采集，页面继续使用本地落盘数据。",
+            "run": existing_run,
+            "local": local_data_status(conn, utility_type),
+        }
     account = get_account(conn, utility_type)
     payload = account["session_payload"]
     if not payload:
         raise RuntimeError("该渠道尚未接入，请先完成导入")
-    result = collectors.collect(utility_type, payload)
+    start_collection_run(conn, utility_type, trigger_type)
     inserted = 0
     daily_count = 0
-    for bill in result.get("bills") or []:
-        if bill.get("statementDate") and bill.get("amount") is not None:
-            inserted += 1 if upsert_bill(conn, account["id"], utility_type, bill) else 0
-    for row in result.get("daily") or []:
-        if row.get("usageDate"):
-            daily_count += 1 if upsert_daily(conn, account["id"], utility_type, row) else 0
-    message = result.get("message") or f"采集完成：新增账单 {inserted} 条"
-    mark_collected(conn, utility_type, True, message)
-    insert_log(conn, "info", f"{utility_type}-collector", message, {"inserted": inserted, "daily": daily_count})
-    return {"ok": True, "message": message, "inserted": inserted, "daily": daily_count}
+    try:
+        result = collectors.collect(utility_type, payload)
+        for bill in result.get("bills") or []:
+            if bill.get("statementDate") and bill.get("amount") is not None:
+                inserted += 1 if upsert_bill(conn, account["id"], utility_type, bill) else 0
+        for row in result.get("daily") or []:
+            if row.get("usageDate"):
+                daily_count += 1 if upsert_daily(conn, account["id"], utility_type, row) else 0
+        message = result.get("message") or f"采集完成：新增账单 {inserted} 条"
+        mark_collected(conn, utility_type, True, message)
+        finish_collection_run(conn, utility_type, True, message, inserted, daily_count)
+        insert_log(conn, "info", f"{utility_type}-collector", message, {"inserted": inserted, "daily": daily_count})
+        return {"ok": True, "message": message, "inserted": inserted, "daily": daily_count}
+    except Exception as exc:
+        message = user_message(utility_type, exc)
+        mark_collected(conn, utility_type, False, message)
+        finish_collection_run(conn, utility_type, False, message, inserted, daily_count)
+        insert_log(conn, "error", f"{utility_type}-collector", message, {"raw": str(exc)})
+        raise
 
 
 def scheduler_loop():
@@ -143,7 +183,7 @@ def scheduler_loop():
             for job in settings.get("jobs") or []:
                 if job.get("enabled") and job.get("schedule_time") == now_hm:
                     try:
-                        run_collect_for(conn, job["utility_type"])
+                        run_collect_for(conn, job["utility_type"], "scheduled")
                     except Exception as exc:
                         message = user_message(job["utility_type"], exc)
                         mark_collected(conn, job["utility_type"], False, message)
@@ -290,11 +330,15 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if path == "/api/import/electricity":
                 data = parse_json_body(self)
-                payload = collectors.import_sgcc_state(data.get("content") or "")
+                if data.get("username") or data.get("password"):
+                    payload = collectors.import_sgcc_credentials(data)
+                else:
+                    payload = collectors.import_sgcc_state(data.get("content") or "")
                 conn = self.db()
                 try:
-                    update_account_session(conn, "electricity", payload, payload.get("accountNo") or "")
-                    return self.json(200, {"ok": True, "message": "国网登录状态已导入", "summary": {"accountNo": payload.get("accountNo")}})
+                    account_no = payload.get("displayAccount") or payload.get("accountNo") or ""
+                    update_account_session(conn, "electricity", payload, account_no)
+                    return self.json(200, {"ok": True, "message": "国网账号已保存", "summary": {"accountNo": account_no}})
                 finally:
                     conn.close()
             if path == "/api/import/water":
@@ -303,7 +347,7 @@ class Handler(BaseHTTPRequestHandler):
                 conn = self.db()
                 try:
                     update_account_session(conn, "water", payload, payload.get("meterNumber") or payload.get("cardNos") or "")
-                    return self.json(200, {"ok": True, "message": "杭水抓包文件已导入", "summary": {"meterNumber": payload.get("meterNumber") or payload.get("cardNos")}})
+                    return self.json(200, {"ok": True, "message": "杭水授权文件已导入", "summary": {"meterNumber": payload.get("meterNumber") or payload.get("cardNos")}})
                 finally:
                     conn.close()
             if path == "/api/import/gas":
@@ -312,14 +356,14 @@ class Handler(BaseHTTPRequestHandler):
                 conn = self.db()
                 try:
                     update_account_session(conn, "gas", payload, payload.get("userNo") or "")
-                    return self.json(200, {"ok": True, "message": "燃气抓包文件已导入", "summary": {"userNo": payload.get("userNo"), "orgId": payload.get("orgId")}})
+                    return self.json(200, {"ok": True, "message": "燃气授权文件已导入", "summary": {"userNo": payload.get("userNo"), "orgId": payload.get("orgId")}})
                 finally:
                     conn.close()
             if path.startswith("/api/test/"):
                 utility_type = path.rsplit("/", 1)[-1]
                 conn = self.db()
                 try:
-                    result = run_collect_for(conn, utility_type)
+                    result = local_check_for(conn, utility_type)
                     update_account_test(conn, utility_type, True, result["message"])
                     return self.json(200, result)
                 except Exception as exc:
@@ -333,7 +377,7 @@ class Handler(BaseHTTPRequestHandler):
                 utility_type = path.rsplit("/", 1)[-1]
                 conn = self.db()
                 try:
-                    return self.json(200, run_collect_for(conn, utility_type))
+                    return self.json(200, run_collect_for(conn, utility_type, "manual"))
                 except Exception as exc:
                     message = user_message(utility_type, exc)
                     mark_collected(conn, utility_type, False, message)

@@ -1,4 +1,4 @@
-const toast = document.querySelector("#toast");
+﻿const toast = document.querySelector("#toast");
 const names = {electricity: "电费", water: "水费", gas: "燃气费"};
 const units = {electricity: "kWh", water: "m³", gas: "m³"};
 
@@ -16,7 +16,7 @@ async function api(path, options = {}) {
   });
   if (res.status === 401) location.href = "/login.html";
   const data = await res.json();
-  if (!data.ok) throw new Error(data.message || "请求失败");
+  if (!data.ok) throw new Error(data.message || "璇锋眰澶辫触");
   return data.data ?? data;
 }
 
@@ -53,13 +53,13 @@ async function initDashboard() {
   const summary = data.latestSummary || data.summary || {};
   const total = Object.values(summary).reduce((sum, item) => sum + Number(item.amount || 0), 0);
   root.innerHTML = [
-    `<div class="card metric"><div class="label">最新账单合计</div><div class="value">${money(total)}</div><p class="sub">各渠道最近一期账单</p></div>`,
+    `<div class="card metric"><div class="label">鏈€鏂拌处鍗曞悎璁?/div><div class="value">${money(total)}</div><p class="sub">鍚勬笭閬撴渶杩戜竴鏈熻处鍗?/p></div>`,
     card("electricity", summary.electricity),
     card("water", summary.water),
     card("gas", summary.gas),
   ].join("");
-  document.querySelector("#sideStatus").innerHTML = data.accounts.map(item => `${item.provider_name}：${statusText(item)}`).join("<br>");
-  document.querySelector("#accountStatus").innerHTML = data.accounts.map(item => `<div><span class="status-dot ${item.status === "ok" ? "ok" : item.configured ? "warn" : ""}"></span>${item.provider_name}：${statusText(item)}</div>`).join("");
+  document.querySelector("#sideStatus").innerHTML = data.accounts.map(item => `${item.provider_name}锛?{statusText(item)}`).join("<br>");
+  document.querySelector("#accountStatus").innerHTML = data.accounts.map(item => `<div><span class="status-dot ${item.status === "ok" ? "ok" : item.configured ? "warn" : ""}"></span>${item.provider_name}锛?{statusText(item)}</div>`).join("");
   renderBillGroups(data.billsByType || {});
   const monthly = {};
   for (const item of data.recentBills || []) {
@@ -87,9 +87,9 @@ function renderBillGroups(groups) {
         <div class="sub">${Number(item.usage_value || 0).toFixed(2)} ${item.usage_unit || units[type]}</div>
       </div>
       <b>${money(item.amount)}</b>
-    </div>`).join("") || `<p class="helper">暂无${names[type]}账单</p>`;
+    </div>`).join("") || `<p class="helper">鏆傛棤${names[type]}璐﹀崟</p>`;
     return `<section class="bill-group ${type}">
-      <div class="bill-group-head"><h3>${names[type]}</h3><span>${rows.length} 条</span></div>
+      <div class="bill-group-head"><h3>${names[type]}</h3><span>${rows.length} 鏉?/span></div>
       ${body}
     </section>`;
   }).join("");
@@ -97,15 +97,15 @@ function renderBillGroups(groups) {
 }
 
 function card(type, item = {}) {
-  const date = item.statementDate ? ` · ${item.statementDate}` : "";
-  return `<div class="card metric ${type === "electricity" ? "electric-card" : type === "water" ? "water-card" : "gas-card"}"><div class="label">${names[type]}</div><div class="value">${money(item.amount)}</div><p class="sub">用量 ${Number(item.usage || 0).toFixed(2)} ${units[type]}${date}</p></div>`;
+  const date = item.statementDate ? ` 路 ${item.statementDate}` : "";
+  return `<div class="card metric ${type === "electricity" ? "electric-card" : type === "water" ? "water-card" : "gas-card"}"><div class="label">${names[type]}</div><div class="value">${money(item.amount)}</div><p class="sub">鐢ㄩ噺 ${Number(item.usage || 0).toFixed(2)} ${units[type]}${date}</p></div>`;
 }
 
 function renderBars(selector, rows) {
   const root = document.querySelector(selector);
   if (!root) return;
   const max = Math.max(...rows.map(([, v]) => Number(v)), 1);
-  root.innerHTML = rows.map(([label, value]) => `<div class="bar-wrap"><div class="bar" style="height:${Math.max(24, Number(value) / max * 250)}px"></div><span>${label}</span></div>`).join("") || `<p class="helper">暂无统计数据</p>`;
+  root.innerHTML = rows.map(([label, value]) => `<div class="bar-wrap"><div class="bar" style="height:${Math.max(24, Number(value) / max * 250)}px"></div><span>${label}</span></div>`).join("") || `<p class="helper">鏆傛棤缁熻鏁版嵁</p>`;
 }
 
 async function initAnalytics() {
@@ -118,7 +118,7 @@ async function initAnalytics() {
       buckets[row.bucket] = (buckets[row.bucket] || 0) + Number(row.amount || 0);
     }
     renderBars("#analyticsBars", Object.entries(buckets).slice(-8));
-    document.querySelector("#analyticsRows").innerHTML = (data.rows || []).slice(-12).map(row => `<div class="list-row"><div><b>${row.bucket}</b><div class="sub">${names[row.utility_type]} ${Number(row.usage || 0).toFixed(2)}</div></div><b>${money(row.amount)}</b></div>`).join("") || `<p class="helper">暂无统计数据</p>`;
+    document.querySelector("#analyticsRows").innerHTML = (data.rows || []).slice(-12).map(row => `<div class="list-row"><div><b>${row.bucket}</b><div class="sub">${names[row.utility_type]} ${Number(row.usage || 0).toFixed(2)}</div></div><b>${money(row.amount)}</b></div>`).join("") || `<p class="helper">鏆傛棤缁熻鏁版嵁</p>`;
   }
   document.querySelectorAll(".tabs button").forEach(btn => btn.onclick = () => {
     document.querySelectorAll(".tabs button").forEach(item => item.classList.remove("active"));
@@ -134,7 +134,7 @@ async function initAdmin() {
   const accounts = await api("/api/accounts");
   const settings = await api("/api/settings");
   providerRoot.innerHTML = accounts.map(account => providerCard(account)).join("");
-  document.querySelector("#jobsForm").innerHTML = (settings.jobs || []).map(job => `<label>${names[job.utility_type]}采集时间<input class="input job-time" data-type="${job.utility_type}" value="${job.schedule_time || "07:30"}"></label>`).join("");
+  document.querySelector("#jobsForm").innerHTML = (settings.jobs || []).map(job => `<label>${names[job.utility_type]}閲囬泦鏃堕棿<input class="input job-time" data-type="${job.utility_type}" value="${job.schedule_time || "07:30"}"></label>`).join("");
   document.querySelector("#wecomWebhook").value = settings.wecom_webhook || "";
   document.querySelector("#pushDaily").checked = settings.push_daily_summary === "true";
   document.querySelector("#pushFailure").checked = settings.push_failure_alert === "true";
@@ -149,15 +149,17 @@ async function initAdmin() {
 function providerCard(account) {
   const colorClass = account.utility_type === "electricity" ? "electric-card" : account.utility_type === "water" ? "water-card" : "gas-card";
   const auth = account.authStatus || {};
-  const importText = account.configured ? "重新导入" : (account.utility_type === "electricity" ? "导入登录状态" : "导入抓包文件");
+  const importText = account.configured ? "閲嶆柊璁剧疆" : (account.utility_type === "electricity" ? "濉啓璐﹀彿" : "瀵煎叆鎶撳寘鏂囦欢");
+  const local = account.localData || {};
+  const todayRun = local.todayRun || {};
   const authClass = auth.needsReauth ? "auth-warning" : "auth-ok";
   const desc = {
-    electricity: "登录国网页面后导入登录状态，系统自动获取月账单和近 7 日日用电。",
-    water: "导入杭水 e 家抓包文件，系统自动识别水表号和账单接口。",
-    gas: "导入公众号查询页抓包文件，系统自动识别燃气户号、机构和账单记录。"
+    electricity: "填写国网账号和密码。系统每日只登录采集一次，成功后把账单落盘到本地。",
+    water: "导入杭水 E 家授权文件。系统每日采集一次，成功后把账单落盘到本地。",
+    gas: "导入杭州燃气公众号账单页授权文件。系统每日采集一次，成功后把账单落盘到本地。"
   }[account.utility_type];
   const authNotice = auth.needsReauth
-    ? `<div class="auth-banner">登录信息可能已过期，请重新导入后再测试。</div>`
+    ? `<div class="auth-banner">登录信息可能已过期，请重新导入。国网每日登录次数有限，测试不会触发登录。</div>`
     : "";
   return `<div class="provider-card ${colorClass}" data-type="${account.utility_type}">
     <div class="provider-head"><h2>${account.provider_name}</h2><span class="tag">${statusText(account)}</span></div>
@@ -166,11 +168,13 @@ function providerCard(account) {
       <div><b>当前账号</b><span>${providerIdentity(account)}</span></div>
       <div><b>最后授权</b><span>${formatDateTime(auth.authorizedAt)}</span></div>
       <div><b>预计过期</b><span>${auth.expiresAt ? formatDateTime(auth.expiresAt) : (auth.expiresText || "失效后重新导入")}</span></div>
-      <div><b>状态说明</b><span>${auth.hint || "登录信息已保存。"}</span></div>
+      <div><b>本地数据</b><span>账单 ${local.billCount || 0} 条，最新 ${local.latestBillDate || "暂无"}</span></div>
+      <div><b>今日采集</b><span>${todayRun.status ? `${todayRun.status} · ${todayRun.message || ""}` : "今日尚未执行"}</span></div>
+      <div><b>状态说明</b><span>${auth.hint || "登录信息已保存"}</span></div>
     </div>
     ${authNotice}
-    ${account.last_test_message ? `<p class="helper">最近测试：${account.last_test_message}</p>` : ""}
-    <div style="display:flex;gap:10px"><button class="btn import-btn">${importText}</button><button class="btn secondary test-btn">测试连接</button></div>
+    ${account.last_test_message ? `<p class="helper">鏈€杩戞祴璇曪細${account.last_test_message}</p>` : ""}
+    <div style="display:flex;gap:10px"><button class="btn import-btn">${importText}</button><button class="btn secondary test-btn">检查本地数据</button></div>
   </div>`;
 }
 
@@ -180,6 +184,9 @@ function bindProviderActions() {
   const scriptContent = document.querySelector("#scriptContent");
   const copyScript = document.querySelector("#copyScript");
   const importContent = document.querySelector("#importContent");
+  const credentialBox = document.querySelector("#credentialBox");
+  const sgccUsername = document.querySelector("#sgccUsername");
+  const sgccPassword = document.querySelector("#sgccPassword");
   let currentType = "";
   document.querySelectorAll(".provider-card").forEach(card => {
     const type = card.dataset.type;
@@ -187,10 +194,13 @@ function bindProviderActions() {
       currentType = type;
       document.querySelector("#dialogTitle").textContent = `${names[type]}接入`;
       document.querySelector("#dialogHelp").textContent = type === "electricity"
-        ? "先复制脚本，到已登录的国网电费页面控制台执行。执行后通常会自动复制 JSON，再回到这里粘贴。"
+        ? "填写国网账号和密码。系统每日只登录采集一次，成功后会把账单落盘到本地；登录状态导入仅作为备用。"
         : "粘贴完整 HAR JSON，系统会自动识别必要登录信息。";
       importContent.value = "";
-      importContent.placeholder = type === "electricity" ? "粘贴国网页面控制台输出的完整 JSON" : "粘贴完整 HAR JSON";
+      if (sgccPassword) sgccPassword.value = "";
+      importContent.placeholder = type === "electricity" ? "备用：粘贴国网页面导出的登录状态 JSON" : "粘贴完整 HAR JSON";
+      if (credentialBox) credentialBox.hidden = type !== "electricity";
+      importContent.hidden = type === "electricity";
       scriptBox.hidden = type !== "electricity";
       scriptContent.value = type === "electricity" ? sgccExportSnippet() : "";
       dialog.showModal();
@@ -198,7 +208,7 @@ function bindProviderActions() {
     card.querySelector(".test-btn").onclick = async () => {
       try {
         const result = await api(`/api/test/${type}`, {method: "POST", body: "{}"});
-        showToast(result.message || "连接成功");
+        showToast(result.message || "杩炴帴鎴愬姛");
         setTimeout(() => location.reload(), 800);
       } catch (error) {
         showToast(error.message);
@@ -209,8 +219,11 @@ function bindProviderActions() {
     event.preventDefault();
     try {
       const content = document.querySelector("#importContent").value;
-      const result = await api(`/api/import/${currentType}`, {method: "POST", body: JSON.stringify({content})});
-      showToast(result.message || "导入成功");
+      const body = currentType === "electricity" && (sgccUsername?.value || sgccPassword?.value)
+        ? {username: sgccUsername.value, password: sgccPassword.value}
+        : {content};
+      const result = await api(`/api/import/${currentType}`, {method: "POST", body: JSON.stringify(body)});
+      showToast(result.message || "瀵煎叆鎴愬姛");
       dialog.close();
       setTimeout(() => location.reload(), 800);
     } catch (error) {
@@ -232,7 +245,7 @@ function bindProviderActions() {
 }
 
 function sgccExportSnippet() {
-  return `(() => {\n  const app = document.querySelector("#app");\n  const vue = app && app.__vue__ ? app.__vue__ : null;\n  const root = vue && vue.$root ? vue.$root : null;\n  const store = root && root.$store ? root.$store : null;\n  const getters = (store && store.getters) || {};\n  const mustKeys = ["getRequestCyu", "getAccessToken", "getToken", "getUserInfo", "getRequestParams"];\n  const templateCodes = new Set(["010102", "010103"]);\n  const pattern = /key|token|access|request|public|user|power|door|auth|account/i;\n  const clone = (value) => {\n    if (typeof value === "string") return value;\n    return JSON.parse(JSON.stringify(value));\n  };\n  const readGetter = (key) => {\n    try {\n      const value = getters[key];\n      if (value !== undefined && value !== null) return clone(value);\n    } catch (error) {\n      return String(error);\n    }\n    return undefined;\n  };\n  const pick = (obj) => {\n    const out = {};\n    if (!obj || typeof obj !== "object") return out;\n    const keys = new Set([...mustKeys, ...Object.keys(obj).filter((key) => pattern.test(key))]);\n    for (const key of keys) {\n      const value = readGetter(key);\n      if (value !== undefined) out[key] = value;\n    }\n    return out;\n  };\n  const normalizeTemplate = (value) => {\n    if (!value || typeof value !== "object") return null;\n    const body = value.requestBody && typeof value.requestBody === "object" ? value.requestBody : value;\n    return templateCodes.has(String(body.params4 || "")) ? clone(body) : null;\n  };\n  const requestTemplates = [];\n  const seenTemplates = new Set();\n  const addTemplate = (value) => {\n    try {\n      const template = normalizeTemplate(value);\n      if (!template) return;\n      const key = template.params4 + ":" + JSON.stringify(template).slice(0, 300);\n      if (seenTemplates.has(key)) return;\n      seenTemplates.add(key);\n      requestTemplates.push(template);\n    } catch (error) {}\n  };\n  const visited = new WeakSet();\n  let scanned = 0;\n  const scan = (value, depth = 0) => {\n    if (!value || typeof value !== "object" || depth > 8 || scanned > 5000) return;\n    if (visited.has(value)) return;\n    visited.add(value);\n    scanned += 1;\n    addTemplate(value);\n    if (Array.isArray(value)) {\n      for (const item of value) scan(item, depth + 1);\n      return;\n    }\n    for (const key of Object.keys(value)) {\n      if (key === "$parent" || key === "$root" || key === "__ob__" || key === "_watchers") continue;\n      try {\n        scan(value[key], depth + 1);\n      } catch (error) {}\n    }\n  };\n  const getterHits = pick(getters);\n  scan(getterHits.getRequestParams);\n  scan(store && store.state);\n  scan(root && root.$data);\n  scan(root && root.$children);\n  if (requestTemplates.length) {\n    const existing = Array.isArray(getterHits.getRequestParams) ? getterHits.getRequestParams : [];\n    getterHits.getRequestParams = [...existing, ...requestTemplates.map((item) => ({ requestBody: item }))];\n  }\n  const foundCodes = new Set((getterHits.getRequestParams || []).map((item) => String(((item || {}).requestBody || item || {}).params4 || "")));\n  const missing = mustKeys.filter((key) => !getterHits[key]);\n  const missingTemplates = [...templateCodes].filter((code) => !foundCodes.has(code));\n  const output = JSON.stringify({\n    result: { value: {\n      href: location.href,\n      title: document.title,\n      missing,\n      missingTemplates,\n      getterKeys: Object.keys(getters),\n      scanned,\n      requestTemplates,\n      getterHits,\n      sessionHits: Object.fromEntries(Object.entries({ ...sessionStorage }).filter(([key]) => pattern.test(key))),\n      localHits: Object.fromEntries(Object.entries({ ...localStorage }).filter(([key]) => pattern.test(key)))\n    }}\n  }, null, 2);\n  console.log(output);\n  if (typeof copy === "function") copy(output);\n  return missing.length || missingTemplates.length\n    ? "已导出，但仍缺少：" + [...missing, ...missingTemplates].join(", ") + "。请确认当前页面是国网电费账单页，并等待账单加载完成后重试。"\n    : "已生成登录信息 JSON；如果浏览器允许，内容已自动复制。否则请复制上方 console.log 输出的完整 JSON。";\n})()`;
+  return `(() => {\n  const app = document.querySelector("#app");\n  const vue = app && app.__vue__ ? app.__vue__ : null;\n  const root = vue && vue.$root ? vue.$root : null;\n  const store = root && root.$store ? root.$store : null;\n  const getters = (store && store.getters) || {};\n  const mustKeys = ["getRequestCyu", "getAccessToken", "getToken", "getUserInfo", "getRequestParams"];\n  const templateCodes = new Set(["010102", "010103"]);\n  const pattern = /key|token|access|request|public|user|power|door|auth|account/i;\n  const clone = (value) => {\n    if (typeof value === "string") return value;\n    return JSON.parse(JSON.stringify(value));\n  };\n  const readGetter = (key) => {\n    try {\n      const value = getters[key];\n      if (value !== undefined && value !== null) return clone(value);\n    } catch (error) {\n      return String(error);\n    }\n    return undefined;\n  };\n  const pick = (obj) => {\n    const out = {};\n    if (!obj || typeof obj !== "object") return out;\n    const keys = new Set([...mustKeys, ...Object.keys(obj).filter((key) => pattern.test(key))]);\n    for (const key of keys) {\n      const value = readGetter(key);\n      if (value !== undefined) out[key] = value;\n    }\n    return out;\n  };\n  const normalizeTemplate = (value) => {\n    if (!value || typeof value !== "object") return null;\n    const body = value.requestBody && typeof value.requestBody === "object" ? value.requestBody : value;\n    return templateCodes.has(String(body.params4 || "")) ? clone(body) : null;\n  };\n  const requestTemplates = [];\n  const seenTemplates = new Set();\n  const addTemplate = (value) => {\n    try {\n      const template = normalizeTemplate(value);\n      if (!template) return;\n      const key = template.params4 + ":" + JSON.stringify(template).slice(0, 300);\n      if (seenTemplates.has(key)) return;\n      seenTemplates.add(key);\n      requestTemplates.push(template);\n    } catch (error) {}\n  };\n  const visited = new WeakSet();\n  let scanned = 0;\n  const scan = (value, depth = 0) => {\n    if (!value || typeof value !== "object" || depth > 8 || scanned > 5000) return;\n    if (visited.has(value)) return;\n    visited.add(value);\n    scanned += 1;\n    addTemplate(value);\n    if (Array.isArray(value)) {\n      for (const item of value) scan(item, depth + 1);\n      return;\n    }\n    for (const key of Object.keys(value)) {\n      if (key === "$parent" || key === "$root" || key === "__ob__" || key === "_watchers") continue;\n      try {\n        scan(value[key], depth + 1);\n      } catch (error) {}\n    }\n  };\n  const getterHits = pick(getters);\n  scan(getterHits.getRequestParams);\n  scan(store && store.state);\n  scan(root && root.$data);\n  scan(root && root.$children);\n  if (requestTemplates.length) {\n    const existing = Array.isArray(getterHits.getRequestParams) ? getterHits.getRequestParams : [];\n    getterHits.getRequestParams = [...existing, ...requestTemplates.map((item) => ({ requestBody: item }))];\n  }\n  const foundCodes = new Set((getterHits.getRequestParams || []).map((item) => String(((item || {}).requestBody || item || {}).params4 || "")));\n  const missing = mustKeys.filter((key) => !getterHits[key]);\n  const missingTemplates = [...templateCodes].filter((code) => !foundCodes.has(code));\n  const output = JSON.stringify({\n    result: { value: {\n      href: location.href,\n      title: document.title,\n      missing,\n      missingTemplates,\n      getterKeys: Object.keys(getters),\n      scanned,\n      requestTemplates,\n      getterHits,\n      sessionHits: Object.fromEntries(Object.entries({ ...sessionStorage }).filter(([key]) => pattern.test(key))),\n      localHits: Object.fromEntries(Object.entries({ ...localStorage }).filter(([key]) => pattern.test(key)))\n    }}\n  }, null, 2);\n  console.log(output);\n  if (typeof copy === "function") copy(output);\n  return missing.length || missingTemplates.length\n    ? "宸插鍑猴紝浣嗕粛缂哄皯锛? + [...missing, ...missingTemplates].join(", ") + "銆傝纭褰撳墠椤甸潰鏄浗缃戠數璐硅处鍗曢〉锛屽苟绛夊緟璐﹀崟鍔犺浇瀹屾垚鍚庨噸璇曘€?\n    : "宸茬敓鎴愮櫥褰曚俊鎭?JSON锛涘鏋滄祻瑙堝櫒鍏佽锛屽唴瀹瑰凡鑷姩澶嶅埗銆傚惁鍒欒澶嶅埗涓婃柟 console.log 杈撳嚭鐨勫畬鏁?JSON銆?;\n})()`;
 }
 
 initDashboard().catch(error => showToast(error.message));

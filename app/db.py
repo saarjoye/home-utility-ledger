@@ -11,6 +11,10 @@ def now_iso() -> str:
     return datetime.now().replace(microsecond=0).isoformat()
 
 
+def today_key() -> str:
+    return datetime.now().strftime("%Y-%m-%d")
+
+
 def default_db_path() -> Path:
     return Path(os.environ.get("APP_DATA_DIR", "/data")) / "home-utility-ledger.db"
 
@@ -103,6 +107,20 @@ def migrate(conn: sqlite3.Connection) -> None:
           updated_at TEXT NOT NULL
         );
 
+        CREATE TABLE IF NOT EXISTS collection_runs (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          utility_type TEXT NOT NULL,
+          run_date TEXT NOT NULL,
+          trigger_type TEXT NOT NULL DEFAULT 'scheduled',
+          status TEXT NOT NULL DEFAULT 'running',
+          message TEXT NOT NULL DEFAULT '',
+          bills_inserted INTEGER NOT NULL DEFAULT 0,
+          daily_inserted INTEGER NOT NULL DEFAULT 0,
+          started_at TEXT NOT NULL,
+          finished_at TEXT,
+          UNIQUE(utility_type, run_date)
+        );
+
         CREATE TABLE IF NOT EXISTS settings (
           key TEXT PRIMARY KEY,
           value TEXT NOT NULL,
@@ -177,6 +195,7 @@ def list_accounts(conn: sqlite3.Connection) -> list[dict]:
         item["configured"] = bool(payload)
         item["sessionSummary"] = summarize_payload(item["utility_type"], payload)
         item["authStatus"] = account_auth_status(item, payload)
+        item["localData"] = local_data_status(conn, item["utility_type"])
         out.append(item)
     return out
 
@@ -193,7 +212,8 @@ def get_account(conn: sqlite3.Connection, utility_type: str) -> dict:
 def summarize_payload(utility_type: str, payload: dict) -> dict:
     if utility_type == "electricity":
         return {
-            "hasLoginState": bool(payload.get("getterHits") or payload.get("result")),
+            "mode": payload.get("mode") or ("browser_state" if (payload.get("getterHits") or payload.get("result")) else ""),
+            "hasLoginState": bool(payload.get("getterHits") or payload.get("result") or payload.get("mode") == "web_login"),
             "accountNo": payload.get("displayAccount") or payload.get("accountNo") or payload.get("consNo") or "",
         }
     if utility_type == "water":
@@ -235,6 +255,14 @@ def account_auth_status(item: dict, payload: dict) -> dict:
     last_failed = item.get("last_test_status") == "error"
 
     if utility_type == "electricity":
+        if payload.get("mode") == "web_login":
+            return {
+                "authorizedAt": authorized_at,
+                "expiresAt": "",
+                "expiresText": "自动登录",
+                "hint": "已保存账号密码，采集时会自动登录国网页面。",
+                "needsReauth": last_failed,
+            }
         expires_dt = authorized_dt + timedelta(hours=12) if authorized_dt else None
         expired = bool(expires_dt and expires_dt <= datetime.now())
         needs_reauth = expired or last_failed
@@ -301,6 +329,89 @@ def mark_collected(conn: sqlite3.Connection, utility_type: str, ok: bool, messag
         (now_iso(), "success" if ok else "error", message, now_iso(), utility_type),
     )
     conn.commit()
+
+
+def get_collection_run(conn: sqlite3.Connection, utility_type: str, run_date: str | None = None) -> dict | None:
+    row = conn.execute(
+        """
+        SELECT * FROM collection_runs
+        WHERE utility_type = ? AND run_date = ?
+        """,
+        (utility_type, run_date or today_key()),
+    ).fetchone()
+    return row_to_dict(row)
+
+
+def start_collection_run(conn: sqlite3.Connection, utility_type: str, trigger_type: str = "scheduled") -> dict:
+    run_date = today_key()
+    existing = get_collection_run(conn, utility_type, run_date)
+    if existing:
+        return existing
+    now = now_iso()
+    conn.execute(
+        """
+        INSERT INTO collection_runs
+          (utility_type, run_date, trigger_type, status, message, started_at)
+        VALUES (?, ?, ?, 'running', '', ?)
+        """,
+        (utility_type, run_date, trigger_type, now),
+    )
+    conn.commit()
+    return get_collection_run(conn, utility_type, run_date) or {}
+
+
+def finish_collection_run(
+    conn: sqlite3.Connection,
+    utility_type: str,
+    ok: bool,
+    message: str,
+    bills_inserted: int = 0,
+    daily_inserted: int = 0,
+) -> None:
+    conn.execute(
+        """
+        UPDATE collection_runs
+        SET status = ?, message = ?, bills_inserted = ?, daily_inserted = ?, finished_at = ?
+        WHERE utility_type = ? AND run_date = ?
+        """,
+        (
+            "success" if ok else "error",
+            message,
+            int(bills_inserted or 0),
+            int(daily_inserted or 0),
+            now_iso(),
+            utility_type,
+            today_key(),
+        ),
+    )
+    conn.commit()
+
+
+def local_data_status(conn: sqlite3.Connection, utility_type: str) -> dict:
+    bill_row = conn.execute(
+        """
+        SELECT COUNT(*) total, MAX(statement_date) latest_date
+        FROM bills
+        WHERE utility_type = ?
+        """,
+        (utility_type,),
+    ).fetchone()
+    daily_row = conn.execute(
+        """
+        SELECT COUNT(*) total, MAX(usage_date) latest_date
+        FROM daily_usage
+        WHERE utility_type = ?
+        """,
+        (utility_type,),
+    ).fetchone()
+    today_run = get_collection_run(conn, utility_type)
+    return {
+        "billCount": int(bill_row["total"] or 0) if bill_row else 0,
+        "latestBillDate": bill_row["latest_date"] if bill_row and bill_row["latest_date"] else "",
+        "dailyCount": int(daily_row["total"] or 0) if daily_row else 0,
+        "latestDailyDate": daily_row["latest_date"] if daily_row and daily_row["latest_date"] else "",
+        "todayRun": today_run,
+    }
 
 
 def insert_log(conn: sqlite3.Connection, level: str, module: str, message: str, details=None) -> None:

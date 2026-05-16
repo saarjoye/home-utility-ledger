@@ -422,6 +422,24 @@ def insert_log(conn: sqlite3.Connection, level: str, module: str, message: str, 
     conn.commit()
 
 
+def list_logs(conn: sqlite3.Connection, limit: int = 80) -> list[dict]:
+    rows = conn.execute(
+        """
+        SELECT id, level, module, message, details, created_at
+        FROM logs
+        ORDER BY id DESC
+        LIMIT ?
+        """,
+        (max(1, min(int(limit or 80), 200)),),
+    ).fetchall()
+    out = []
+    for row in rows:
+        item = dict(row)
+        item["details"] = json_loads(item.get("details"), {})
+        out.append(item)
+    return out
+
+
 def upsert_bill(conn: sqlite3.Connection, account_id: int, utility_type: str, bill: dict) -> bool:
     cur = conn.execute(
         """

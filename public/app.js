@@ -33,6 +33,7 @@ async function api(path, options = {}) {
 }
 
 function money(value) {
+  if (value === null || value === undefined || value === "") return "待出账";
   return `¥ ${Number(value || 0).toFixed(2)}`;
 }
 
@@ -99,14 +100,15 @@ function summarizeBills(rows) {
   const total = rows.reduce((sum, item) => sum + Number(item.amount || 0), 0);
   const usage = rows.reduce((sum, item) => sum + Number(item.usage_value || 0), 0);
   const last = [...rows].sort((a, b) => String(a.statement_date).localeCompare(String(b.statement_date))).pop() || {};
-  return { amount: total, usage, statementDate: last.statement_date || "" };
+  return { amount: rows.length ? total : null, usage, statementDate: last.statement_date || "", source: "bill", count: rows.length };
 }
 
 function summarizeDaily(rows) {
-  const total = rows.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const amountRows = rows.filter((item) => item.amount !== null && item.amount !== undefined && item.amount !== "");
+  const total = amountRows.reduce((sum, item) => sum + Number(item.amount || 0), 0);
   const usage = rows.reduce((sum, item) => sum + Number(item.usage_value || 0), 0);
   const last = [...rows].sort((a, b) => String(a.usage_date).localeCompare(String(b.usage_date))).pop() || {};
-  return { amount: total, usage, statementDate: last.usage_date || "" };
+  return { amount: amountRows.length ? total : null, usage, statementDate: last.usage_date || "", source: "daily", count: rows.length };
 }
 
 function scopedOverview(data) {
@@ -118,8 +120,18 @@ function scopedOverview(data) {
     gas: (sourceBills.gas || []).filter((item) => inRange(item.statement_date, range)),
   };
   const dailyUsage = (data.dailyUsage || []).filter((item) => inRange(item.usage_date, range));
+  const electricBills = billsByType.electricity;
+  const electricBillSummary = summarizeBills(electricBills);
+  const electricDailySummary = summarizeDaily(dailyUsage);
   const latestSummary = {
-    electricity: dailyUsage.length ? summarizeDaily(dailyUsage) : summarizeBills(billsByType.electricity),
+    electricity: {
+      ...electricDailySummary,
+      amount: electricBillSummary.amount,
+      billAmount: electricBillSummary.amount,
+      billDate: electricBillSummary.statementDate,
+      statementDate: electricDailySummary.statementDate || electricBillSummary.statementDate,
+      source: dailyUsage.length ? "daily+bill" : "bill",
+    },
     water: summarizeBills(billsByType.water),
     gas: summarizeBills(billsByType.gas),
   };
@@ -199,7 +211,7 @@ function renderDashboard(data) {
   const connected = accounts.filter((item) => item.configured).length;
   const total = Object.values(summary).reduce((sum, item) => sum + Number(item.amount || 0), 0);
   document.querySelector("#monthTotal").textContent = money(total);
-  document.querySelector("#monthBreakdown").textContent = `电 ${fmt(summary.electricity?.amount)} · 水 ${fmt(summary.water?.amount)} · 燃 ${fmt(summary.gas?.amount)}`;
+  document.querySelector("#monthBreakdown").textContent = `电 ${amountLabel(summary.electricity)} · 水 ${amountLabel(summary.water)} · 燃 ${amountLabel(summary.gas)}`;
   document.querySelector("#connectedCount").textContent = `${connected} 个渠道已接入`;
   document.querySelector("#lastCollect").textContent = `最后采集 ${latestRun(accounts)}`;
 
@@ -217,9 +229,15 @@ function renderSideStatus(accounts) {
   root.innerHTML = accounts.map((item) => {
     const local = item.localData || {};
     const dot = item.status === "ok" ? "ok" : item.configured ? "warn" : "";
-    const todayRun = local.todayRun ? "今日已记录" : "今日未采集";
-    return `<div class="status-item"><span class="status-dot ${dot}"></span><b>${providerNames[item.utility_type]}</b><p>${statusText(item)}，${todayRun}</p></div>`;
+    const run = local.todayRun;
+    const todayRun = run ? `今日已执行：${run.status || "unknown"}` : "今日未采集";
+    const dataText = `账单 ${local.billCount || 0} 条，日数据 ${local.dailyCount || 0} 条`;
+    return `<div class="status-item"><span class="status-dot ${dot}"></span><b>${providerNames[item.utility_type]}</b><p>${statusText(item)}，${todayRun}<br>${dataText}</p></div>`;
   }).join("");
+}
+
+function amountLabel(item = {}) {
+  return item.amount === null || item.amount === undefined ? "待出账" : fmt(item.amount);
 }
 
 function renderSummaryCards(summary) {
@@ -228,10 +246,13 @@ function renderSummaryCards(summary) {
     const item = summary[type] || {};
     const action = type === "electricity" ? "进入电费详情" : type === "water" ? "进入水费详情" : "进入燃气详情";
     const badge = type === "electricity" ? `最新 ${item.statementDate || "--"}` : `账期 ${String(item.statementDate || "--").slice(0, 7)}`;
+    const amountHint = type === "electricity" && item.amount === null && item.usage
+      ? "日用电已获取，电费金额待月账单出账"
+      : item.statementDate || "暂无账单";
     return `<article class="utility-card ${type}">
       <div class="utility-head"><h2>${names[type]}</h2><span>${badge}</span></div>
       <strong>${money(item.amount)}</strong>
-      <p>${type === "electricity" ? "本月" : "本期"} ${fmt(item.usage)} ${units[type]} · ${item.statementDate || "暂无账单"}</p>
+      <p>${type === "electricity" ? "本月" : "本期"} ${fmt(item.usage)} ${units[type]} · ${amountHint}</p>
       <a class="btn" href="/analytics.html?type=${type}">${action}</a>
     </article>`;
   }).join("");
@@ -257,7 +278,7 @@ function renderCalendar(rows) {
     cells.push(`<div class="calendar-cell ${active}">
       <b>${day}</b>
       <span>${row.usage_value ? `${fmt(row.usage_value)}°` : ""}</span>
-      <em>${row.amount ? `${fmt(row.amount)}元` : ""}</em>
+      <em>${row.usage_value && (row.amount === null || row.amount === undefined || row.amount === "") ? "待出账" : row.amount ? `${fmt(row.amount)}元` : ""}</em>
     </div>`);
   }
   root.innerHTML = cells.join("");
@@ -338,7 +359,7 @@ function renderDetail(data) {
   document.querySelector("#detailTitle").textContent = `${names[type]}信息`;
   document.querySelector("#detailRefresh").textContent = latestRun(data.accounts || []);
   document.querySelector("#detailPeriod").textContent = summary.statementDate ? String(summary.statementDate).slice(0, 7) : "--";
-  document.querySelector("#detailAmountLabel").textContent = type === "electricity" ? "电费余额 / 最近账单" : `本期${names[type]}`;
+  document.querySelector("#detailAmountLabel").textContent = type === "electricity" ? "最近电费账单" : `本期${names[type]}`;
   document.querySelector("#detailAmount").textContent = money(summary.amount);
   document.querySelector("#detailRangeLabel").textContent = range.label;
   document.querySelector("#detailBillTitle").textContent = `${names[type]}账单列表`;
@@ -354,6 +375,7 @@ function renderDetail(data) {
   });
   renderDetailMetrics(type, summary, data);
   renderDetailInfo(type, account, summary);
+  renderDetailAvailability(type);
   renderCalendar(data.dailyUsage || []);
   document.querySelector("#detailCalendarCard").hidden = type !== "electricity";
   document.querySelector("#periodInfoCard").hidden = type === "electricity";
@@ -364,6 +386,19 @@ function renderDetail(data) {
   renderDetailBills(type, (data.billsByType || {})[type] || []);
 }
 
+function renderDetailAvailability(type) {
+  let note = document.querySelector("#detailDataNote");
+  if (!note) {
+    note = document.createElement("p");
+    note.id = "detailDataNote";
+    note.className = "helper data-note";
+    document.querySelector(".detail-metrics")?.after(note);
+  }
+  note.textContent = type === "electricity"
+    ? "电费日历展示已采集的日用电量；单日金额通常要等国网月账单出账后才能确认。"
+    : `${names[type]}目前按账期账单统计，官方渠道未提供可稳定采集的每日用量明细。`;
+}
+
 function renderDetailMetrics(type, summary, data) {
   const bills = ((data.billsByType || {})[type] || []);
   const previous = bills[1] || {};
@@ -371,7 +406,7 @@ function renderDetailMetrics(type, summary, data) {
   const previousUsage = Number(previous.usage_value || 0);
   const change = previousUsage ? Math.round((usage - previousUsage) / previousUsage * 100) : 0;
   const metrics = type === "electricity"
-    ? [["日总用电", usage ? fmt(usage) + "°" : "--"], ["日电费", money(summary.amount)], ["本月用电", fmt(usage) + "°"], ["上月电费", money(previous.amount)], ["年电费", money(bills.reduce((sum, item) => sum + Number(item.amount || 0), 0))], ["年用电", fmt(bills.reduce((sum, item) => sum + Number(item.usage_value || 0), 0)) + "°"]]
+    ? [["日总用电", usage ? fmt(usage) + "°" : "--"], ["日电费", "待出账"], ["本月用电", fmt(usage) + "°"], ["最近账单", money(summary.billAmount ?? summary.amount)], ["年电费", money(bills.length ? bills.reduce((sum, item) => sum + Number(item.amount || 0), 0) : null)], ["年用电", fmt(bills.reduce((sum, item) => sum + Number(item.usage_value || 0), 0)) + "°"]]
     : [[`本期${type === "water" ? "用水" : "用气"}`, `${fmt(usage)}${units[type]}`], [`上期${type === "water" ? "用水" : "用气"}`, `${fmt(previousUsage)}${units[type]}`], ["同比变化", `${change >= 0 ? "+" : ""}${change}%`], [`季度${names[type]}`, money(bills.slice(0, 3).reduce((sum, item) => sum + Number(item.amount || 0), 0))], [`年度${type === "water" ? "用水" : "用气"}`, `${fmt(bills.reduce((sum, item) => sum + Number(item.usage_value || 0), 0), 0)}${units[type]}`], [`年度${names[type]}`, money(bills.reduce((sum, item) => sum + Number(item.amount || 0), 0))]];
   document.querySelector("#detailMetrics").innerHTML = metrics.map(([label, value]) => `<div><b>${label}</b><strong>${value}</strong></div>`).join("");
 }
@@ -404,11 +439,45 @@ async function initAdmin() {
   document.querySelector("#pushDaily").checked = settings.push_daily_summary === "true";
   document.querySelector("#pushFailure").checked = settings.push_failure_alert === "true";
   bindProviderActions();
+  await loadLogs();
+  document.querySelector("#refreshLogs").onclick = loadLogs;
   document.querySelector("#saveSettings").onclick = async () => {
     const jobs = [...document.querySelectorAll(".job-time")].map((input) => ({ utility_type: input.dataset.type, enabled: true, schedule_time: input.value || "07:30" }));
     await api("/api/settings", { method: "POST", body: JSON.stringify({ jobs, wecom_webhook: document.querySelector("#wecomWebhook").value, push_daily_summary: document.querySelector("#pushDaily").checked, push_failure_alert: document.querySelector("#pushFailure").checked }) });
     showToast("配置已保存");
   };
+}
+
+async function loadLogs() {
+  const root = document.querySelector("#logList");
+  if (!root) return;
+  try {
+    const rows = await api("/api/logs?limit=80");
+    root.innerHTML = rows.map((row) => logRow(row)).join("") || `<p class="helper">暂无采集日志</p>`;
+  } catch (error) {
+    root.innerHTML = `<p class="helper">日志读取失败：${error.message}</p>`;
+  }
+}
+
+function logRow(row) {
+  const details = row.details || {};
+  const counts = [
+    details.billsReceived !== undefined ? `账单 ${details.billsReceived} 条` : "",
+    details.dailyReceived !== undefined ? `日数据 ${details.dailyReceived} 条` : "",
+    details.billsInserted !== undefined ? `新增账单 ${details.billsInserted} 条` : "",
+    details.dailyInserted !== undefined ? `新增日数据 ${details.dailyInserted} 条` : "",
+  ].filter(Boolean).join(" · ");
+  const dates = [
+    details.billDates?.length ? `账单日期：${details.billDates.join("、")}` : "",
+    details.dailyDates?.length ? `日数据：${details.dailyDates.join("、")}` : "",
+    details.raw ? `错误摘要：${String(details.raw).slice(0, 180)}` : "",
+  ].filter(Boolean).join("<br>");
+  return `<article class="log-row ${row.level}">
+    <div><b>${row.module}</b><span>${formatDateTime(row.created_at)}</span></div>
+    <p>${row.message}</p>
+    ${counts ? `<em>${counts}</em>` : ""}
+    ${dates ? `<small>${dates}</small>` : ""}
+  </article>`;
 }
 
 function providerCard(account) {

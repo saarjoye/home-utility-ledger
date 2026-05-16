@@ -24,6 +24,7 @@ from .db import (
     get_session,
     get_settings,
     insert_log,
+    list_logs,
     list_accounts,
     local_data_status,
     mark_collected,
@@ -136,9 +137,28 @@ def local_check_for(conn, utility_type: str) -> dict:
     }
 
 
+def collection_log_details(result: dict, inserted: int, daily_count: int) -> dict:
+    bills = result.get("bills") or []
+    daily = result.get("daily") or []
+    return {
+        "billsReceived": len(bills),
+        "billsInserted": inserted,
+        "dailyReceived": len(daily),
+        "dailyInserted": daily_count,
+        "billDates": [row.get("statementDate") for row in bills[:8] if row.get("statementDate")],
+        "dailyDates": [row.get("usageDate") for row in daily[:8] if row.get("usageDate")],
+        "amounts": [row.get("amount") for row in bills[:8] if row.get("amount") is not None],
+    }
+
+
 def run_collect_for(conn, utility_type: str, trigger_type: str = "scheduled", force: bool = False) -> dict:
     existing_run = get_collection_run(conn, utility_type)
     if existing_run and not force:
+        insert_log(conn, "info", f"{utility_type}-collector", "今日已执行过采集，已跳过外部登录。", {
+            "skipped": True,
+            "run": existing_run,
+            "local": local_data_status(conn, utility_type),
+        })
         return {
             "ok": True,
             "skipped": True,
@@ -164,7 +184,7 @@ def run_collect_for(conn, utility_type: str, trigger_type: str = "scheduled", fo
         message = result.get("message") or f"采集完成：新增账单 {inserted} 条"
         mark_collected(conn, utility_type, True, message)
         finish_collection_run(conn, utility_type, True, message, inserted, daily_count)
-        insert_log(conn, "info", f"{utility_type}-collector", message, {"inserted": inserted, "daily": daily_count})
+        insert_log(conn, "info", f"{utility_type}-collector", message, collection_log_details(result, inserted, daily_count))
         return {"ok": True, "message": message, "inserted": inserted, "daily": daily_count}
     except Exception as exc:
         message = user_message(utility_type, exc)
@@ -253,7 +273,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/analytics":
             return self.redirect("/analytics.html")
         if path == "/healthz":
-            return self.json(200, {"ok": True, "app": "home-utility-ledger-standalone", "version": "standalone-2026.05.16-ui"})
+            return self.json(200, {"ok": True, "app": "home-utility-ledger-standalone", "version": "standalone-2026.05.16-log"})
         if path == "/api/me":
             return self.json(200, {"ok": True, "authenticated": self.authed()})
         if path == "/login.html":
@@ -279,6 +299,13 @@ class Handler(BaseHTTPRequestHandler):
             conn = self.db()
             try:
                 return self.json(200, {"ok": True, "data": list_accounts(conn)})
+            finally:
+                conn.close()
+        if path == "/api/logs":
+            query = parse_qs(parsed.query)
+            conn = self.db()
+            try:
+                return self.json(200, {"ok": True, "data": list_logs(conn, int((query.get("limit") or ["80"])[0] or 80))})
             finally:
                 conn.close()
         if path == "/api/settings":

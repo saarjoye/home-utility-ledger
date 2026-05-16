@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>后台接入管理 - 家庭能源账本</title>
-    <link rel="stylesheet" href="/styles.css?v=20260516-ui">
+    <link rel="stylesheet" href="/styles.css?v=20260516-log">
   </head>
   <body>
     <div class="admin-shell">
@@ -22,7 +22,7 @@
           <a class="active" href="#channels">渠道接入</a>
           <a href="#jobs">采集计划</a>
           <a href="#push">企业微信推送</a>
-          <a href="#security">登录安全</a>
+          <a href="#logs">采集日志</a>
         </aside>
 
         <section class="admin-content">
@@ -56,6 +56,15 @@
               <button class="btn save-wide" id="saveSettings">保存配置</button>
             </div>
           </section>
+
+          <section class="panel-card" id="logs">
+            <div class="panel-head">
+              <h2>采集日志</h2>
+              <button class="btn secondary" id="refreshLogs" type="button">刷新日志</button>
+            </div>
+            <p class="helper">这里会显示每次采集拿到几条账单、几条日数据，以及失败时的错误摘要。用于判断任务是否真的拿到了数据。</p>
+            <div class="log-list" id="logList"></div>
+          </section>
         </section>
       </main>
     </div>
@@ -87,6 +96,6 @@
     </dialog>
 
     <div class="toast" id="toast"></div>
-    <script src="/app.js?v=20260516-ui"></script>
+    <script src="/app.js?v=20260516-log"></script>
   </body>
 </html>

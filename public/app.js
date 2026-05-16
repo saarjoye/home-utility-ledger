@@ -15,6 +15,10 @@ const state = {
   overview: null,
 };
 
+if (["water", "gas"].includes(state.detailType) && !new URLSearchParams(location.search).get("period")) {
+  state.period = "all";
+}
+
 function showToast(message) {
   if (!toast) return;
   toast.textContent = message;
@@ -67,6 +71,7 @@ function dateKey(date = today) {
 function rangeFor(period = state.period) {
   const y = today.getFullYear();
   const m = today.getMonth();
+  if (period === "all") return { start: "0000-01-01", end: "9999-12-31", label: "全部已落盘账单", text: "当前：全部账单" };
   if (period === "day") return { start: dateKey(today), end: dateKey(today), label: dateKey(today), text: "当前：今日" };
   if (period === "week") {
     const day = today.getDay() || 7;
@@ -137,7 +142,7 @@ function scopedOverview(data) {
     gas: summarizeBills(billsByType.gas),
   };
   const recentBills = Object.values(billsByType).flat().sort((a, b) => String(b.statement_date).localeCompare(String(a.statement_date))).slice(0, 12);
-  return { ...data, latestSummary, billsByType, dailyUsage, recentBills };
+  return { ...data, latestSummary, billsByType, dailyUsage, recentBills, allBillsByType: sourceBills };
 }
 
 function latestRun(accounts) {
@@ -421,14 +426,35 @@ async function initDetail() {
   if (!document.querySelector(".mobile-detail")) return;
   const data = await api("/api/overview");
   state.overview = data;
+  syncDetailRangeTabs();
   renderDetail(data);
   wireRangeTabs("#detailRangeTabs", () => renderDetail(data));
+}
+
+function syncDetailRangeTabs() {
+  const root = document.querySelector("#detailRangeTabs");
+  if (!root) return;
+  const isPeriodBillType = ["water", "gas"].includes(state.detailType);
+  let allButton = root.querySelector('button[data-period="all"]');
+  if (isPeriodBillType && !allButton) {
+    allButton = document.createElement("button");
+    allButton.dataset.period = "all";
+    allButton.textContent = "全部";
+    root.prepend(allButton);
+  }
+  if (!isPeriodBillType && allButton) allButton.remove();
+  root.querySelectorAll("button").forEach((btn) => {
+    btn.hidden = isPeriodBillType && ["day", "week"].includes(btn.dataset.period);
+    btn.classList.toggle("active", btn.dataset.period === state.period);
+  });
 }
 
 function renderDetail(data) {
   data = scopedOverview(data);
   const type = state.detailType;
   const summary = (data.latestSummary || {})[type] || {};
+  const allRows = ((data.allBillsByType || data.billsByType || {})[type] || []);
+  const filteredRows = ((data.billsByType || {})[type] || []);
   const account = (data.accounts || []).find((item) => item.utility_type === type) || {};
   const range = rangeFor();
   document.body.dataset.detail = type;
@@ -438,17 +464,9 @@ function renderDetail(data) {
   document.querySelector("#detailAmountLabel").textContent = type === "electricity" ? "最近电费账单" : `本期${names[type]}`;
   document.querySelector("#detailAmount").textContent = money(summary.amount);
   document.querySelector("#detailRangeLabel").textContent = range.label;
-  document.querySelector("#detailBillTitle").textContent = `${names[type]}账单列表`;
+  document.querySelector("#detailBillTitle").textContent = `${names[type]}账单列表${state.period === "all" ? `（全部 ${allRows.length} 条）` : `（当前筛选 ${filteredRows.length} 条 / 全部 ${allRows.length} 条）`}`;
   document.querySelector("#detailTrendTitle").textContent = type === "electricity" ? "近 7 日用电柱状图" : `近 6 期${names[type]}趋势`;
-  document.querySelectorAll("#detailRangeTabs button").forEach((btn) => {
-    const limited = type !== "electricity" && ["day", "week"].includes(btn.dataset.period);
-    btn.hidden = limited;
-    if (limited && btn.classList.contains("active")) {
-      state.period = "month";
-      btn.classList.remove("active");
-      document.querySelector('#detailRangeTabs button[data-period="month"]').classList.add("active");
-    }
-  });
+  syncDetailRangeTabs();
   renderDetailMetrics(type, summary, data);
   renderDetailInfo(type, account, summary);
   renderDetailAvailability(type);
@@ -457,9 +475,9 @@ function renderDetail(data) {
   document.querySelector("#periodInfoCard").hidden = type === "electricity";
   const trendRows = type === "electricity"
     ? (data.dailyUsage || []).slice(0, 7).reverse().map((row) => [String(row.usage_date).slice(5), Number(row.amount || row.usage_value || 0)])
-    : ((data.billsByType || {})[type] || []).slice(0, 6).reverse().map((row) => [String(row.statement_date).slice(0, 7), Number(row.amount || 0)]);
+    : (state.period === "all" ? allRows : filteredRows).slice(0, 12).reverse().map((row) => [String(row.statement_date).slice(0, 7), Number(row.amount || 0)]);
   renderBars("#analyticsBars", trendRows, accents[type]);
-  renderDetailBills(type, (data.billsByType || {})[type] || []);
+  renderDetailBills(type, state.period === "all" ? allRows : filteredRows, allRows.length, filteredRows.length);
 }
 
 function renderDetailAvailability(type) {
@@ -477,13 +495,15 @@ function renderDetailAvailability(type) {
 
 function renderDetailMetrics(type, summary, data) {
   const bills = ((data.billsByType || {})[type] || []);
+  const allBills = ((data.allBillsByType || data.billsByType || {})[type] || []);
+  const metricRows = state.period === "all" && type !== "electricity" ? allBills : bills;
   const previous = bills[1] || {};
   const usage = Number(summary.usage || 0);
   const previousUsage = Number(previous.usage_value || 0);
   const change = previousUsage ? Math.round((usage - previousUsage) / previousUsage * 100) : 0;
   const metrics = type === "electricity"
     ? [["日总用电", usage ? fmt(usage) + "°" : "--"], ["日电费", "待出账"], ["本月用电", fmt(usage) + "°"], ["最近账单", money(summary.billAmount ?? summary.amount)], ["年电费", money(bills.length ? bills.reduce((sum, item) => sum + Number(item.amount || 0), 0) : null)], ["年用电", fmt(bills.reduce((sum, item) => sum + Number(item.usage_value || 0), 0)) + "°"]]
-    : [[`本期${type === "water" ? "用水" : "用气"}`, `${fmt(usage)}${units[type]}`], [`上期${type === "water" ? "用水" : "用气"}`, `${fmt(previousUsage)}${units[type]}`], ["同比变化", `${change >= 0 ? "+" : ""}${change}%`], [`季度${names[type]}`, money(bills.slice(0, 3).reduce((sum, item) => sum + Number(item.amount || 0), 0))], [`年度${type === "water" ? "用水" : "用气"}`, `${fmt(bills.reduce((sum, item) => sum + Number(item.usage_value || 0), 0), 0)}${units[type]}`], [`年度${names[type]}`, money(bills.reduce((sum, item) => sum + Number(item.amount || 0), 0))]];
+    : [["账单条数", metricRows.length], [`统计${type === "water" ? "用水" : "用气"}`, `${fmt(metricRows.reduce((sum, item) => sum + Number(item.usage_value || 0), 0))}${units[type]}`], ["统计费用", money(metricRows.length ? metricRows.reduce((sum, item) => sum + Number(item.amount || 0), 0) : null)], [`本期${type === "water" ? "用水" : "用气"}`, `${fmt(usage)}${units[type]}`], [`上期${type === "water" ? "用水" : "用气"}`, `${fmt(previousUsage)}${units[type]}`], ["同比变化", `${change >= 0 ? "+" : ""}${change}%`]];
   document.querySelector("#detailMetrics").innerHTML = metrics.map(([label, value]) => `<div><b>${label}</b><strong>${value}</strong></div>`).join("");
 }
 
@@ -496,12 +516,15 @@ function renderDetailInfo(type, account, summary) {
   root.innerHTML = rows.map(([label, value]) => `<div><span>${label}</span><b>${value}</b></div>`).join("");
 }
 
-function renderDetailBills(type, rows) {
+function renderDetailBills(type, rows, totalCount = rows.length, filteredCount = rows.length) {
   const root = document.querySelector("#analyticsRows");
-  root.innerHTML = rows.map((item) => `<div class="bill-item ${type}">
+  const header = totalCount !== rows.length || filteredCount !== rows.length
+    ? `<p class="helper bill-count-note">当前显示 ${rows.length} 条，本地共 ${totalCount} 条。</p>`
+    : "";
+  root.innerHTML = header + (rows.map((item) => `<div class="bill-item ${type}">
     <div><b>${String(item.statement_date).slice(0, 7)} ${type === "electricity" ? "电费" : type === "water" ? "用水" : "用气"} ${fmt(item.usage_value)} ${item.usage_unit || units[type]}</b></div>
     <strong>${money(item.amount)}</strong>
-  </div>`).join("") || `<p class="helper">暂无${names[type]}账单</p>`;
+  </div>`).join("") || `<p class="helper">暂无${names[type]}账单；可切换为“全部”查看已落盘历史账单。</p>`);
 }
 
 async function initAdmin() {

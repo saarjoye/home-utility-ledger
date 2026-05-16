@@ -598,7 +598,7 @@ def overview(conn: sqlite3.Connection) -> dict:
                  ROW_NUMBER() OVER (PARTITION BY utility_type ORDER BY statement_date DESC, id DESC) rn
           FROM bills
         )
-        WHERE rn <= 12
+        WHERE rn <= 240
         ORDER BY utility_type, statement_date DESC, id DESC
         """
     ).fetchall()

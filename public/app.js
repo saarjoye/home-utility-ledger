@@ -544,14 +544,27 @@ function logRow(row) {
     details.dailyInserted !== undefined ? `新增日数据 ${details.dailyInserted} 条` : "",
   ].filter(Boolean).join(" · ");
   const rowsHtml = renderLogDetailRows(details);
-  const errorText = details.raw ? `<small>错误摘要：${String(details.raw).slice(0, 180)}</small>` : "";
+  const diagnosis = renderLogDiagnosis(details);
+  const errorText = details.raw ? `<small>原始返回：${String(details.raw).slice(0, 180)}</small>` : "";
   return `<article class="log-row ${row.level}">
     <div><b>${row.module}</b><span>${formatDateTime(row.created_at)}</span></div>
     <p>${row.message}</p>
     ${counts ? `<em>${counts}</em>` : ""}
+    ${diagnosis}
     ${rowsHtml}
     ${errorText}
   </article>`;
+}
+
+function renderLogDiagnosis(details) {
+  const lines = [
+    details.provider ? `渠道：${details.provider}` : "",
+    details.stage ? `阶段：${details.stage}` : "",
+    details.code ? `错误码：${details.code}` : "",
+    details.explain ? `说明：${details.explain}` : "",
+    details.suggestion ? `建议：${details.suggestion}` : "",
+  ].filter(Boolean);
+  return lines.length ? `<div class="log-diagnosis">${lines.map((line) => `<span>${line}</span>`).join("")}</div>` : "";
 }
 
 function renderLogDetailRows(details) {

@@ -398,6 +398,20 @@ body[data-detail="gas"] .hero-amount strong, body[data-detail="gas"] .detail-met
 .log-row span, .log-row small, .log-row em { color: var(--muted); font-style: normal; line-height: 1.55; }
 .log-row p { font-weight: 900; }
 .log-detail-table { display: grid; gap: 8px; }
+.log-diagnosis {
+  display: grid !important;
+  justify-content: stretch !important;
+  gap: 6px !important;
+  padding: 12px;
+  border: 1px solid rgba(245, 158, 11, 0.24);
+  border-radius: 14px;
+  background: #fffbeb;
+}
+.log-diagnosis span {
+  color: #92400e;
+  font-size: 13px;
+  line-height: 1.55;
+}
 .log-detail-row {
   display: grid;
   grid-template-columns: 64px 110px minmax(120px, 1fr) 110px minmax(120px, 1fr);

@@ -51,6 +51,8 @@ INTERNAL_ERROR_MARKERS = (
     "getRequestParams",
     "GB010",
     "GB002",
+    "O10006",
+    "010006",
     "10010",
     "10015",
     "10009",
@@ -58,6 +60,24 @@ INTERNAL_ERROR_MARKERS = (
     "10002",
     "Traceback",
 )
+
+UTILITY_LABELS = {
+    "electricity": "国网浙江电力",
+    "water": "杭州市水务",
+    "gas": "杭州天然气",
+}
+
+SGCC_ERROR_HINTS = {
+    "O10006": "国网接口拒绝了本次请求，常见原因是当天登录/采集次数过多、触发风控，或账号登录态刚失效。",
+    "010006": "国网接口拒绝了本次请求，常见原因是当天登录/采集次数过多、触发风控，或账号登录态刚失效。",
+    "GB002": "国网账号密码登录请求被拒绝，通常与验证码、风控或账号当天登录次数有关。",
+    "GB010": "国网登录初始化失败，通常是风控参数或临时会话不可用。",
+    "10010": "国网登录状态已过期，需要重新授权或等待下次自动登录。",
+    "10015": "国网登录状态已过期，需要重新授权或等待下次自动登录。",
+    "10009": "国网登录状态已过期，需要重新授权或等待下次自动登录。",
+    "10005": "国网登录状态已过期，需要重新授权或等待下次自动登录。",
+    "10002": "国网登录状态已过期，需要重新授权或等待下次自动登录。",
+}
 
 
 def admin_user() -> str:
@@ -104,6 +124,9 @@ def parse_request_body(handler: BaseHTTPRequestHandler) -> dict:
 def user_message(utility_type: str, exc: Exception) -> str:
     raw = str(exc) or exc.__class__.__name__
     if utility_type == "electricity":
+        for code, hint in SGCC_ERROR_HINTS.items():
+            if code in raw:
+                return f"国网采集失败：{hint}建议今天不要反复手动测试，优先等待明天自动采集；如果仍失败，再重新授权。"
         if any(marker in raw for marker in INTERNAL_ERROR_MARKERS) or "模板" in raw or "登录状态" in raw:
             return "国网授权已失效或页面状态不完整。请等待次日自动采集，或重新导入授权后再试。"
         return raw if len(raw) <= 120 else "国网采集失败，请重新导入登录信息后再试。"
@@ -117,6 +140,31 @@ def generic_user_message(exc: Exception) -> str:
     if any(marker in raw for marker in INTERNAL_ERROR_MARKERS):
         return "操作失败，登录信息可能已失效，请重新导入后再试。"
     return raw if len(raw) <= 160 else "操作失败，请检查导入内容后重试。"
+
+
+def error_log_details(utility_type: str, exc: Exception) -> dict:
+    raw = str(exc) or exc.__class__.__name__
+    stage = "外部接口请求"
+    if utility_type == "electricity":
+        if "账号密码登录" in raw or "GB002" in raw or "GB010" in raw:
+            stage = "国网登录"
+        elif "O10006" in raw or "010006" in raw:
+            stage = "国网账单/日用电接口"
+        elif "010102" in raw:
+            stage = "国网月账单接口"
+        elif "010103" in raw:
+            stage = "国网日用电接口"
+        elif "Token" in raw or "登录态" in raw:
+            stage = "国网登录态校验"
+    matched_code = next((code for code in SGCC_ERROR_HINTS if code in raw), "")
+    return {
+        "provider": UTILITY_LABELS.get(utility_type, utility_type),
+        "stage": stage,
+        "code": matched_code,
+        "explain": SGCC_ERROR_HINTS.get(matched_code, ""),
+        "suggestion": "不要连续手动测试同一国网账号；国网有每日风控次数限制，建议等待明天自动采集或重新授权后只测试一次。" if utility_type == "electricity" else "请检查授权信息是否过期，必要时重新导入后再试。",
+        "raw": raw,
+    }
 
 
 def local_check_for(conn, utility_type: str) -> dict:
@@ -220,7 +268,7 @@ def run_collect_for(conn, utility_type: str, trigger_type: str = "scheduled", fo
         message = user_message(utility_type, exc)
         mark_collected(conn, utility_type, False, message)
         finish_collection_run(conn, utility_type, False, message, inserted, daily_count)
-        insert_log(conn, "error", f"{utility_type}-collector", message, {"raw": str(exc)})
+        insert_log(conn, "error", f"{utility_type}-collector", message, error_log_details(utility_type, exc))
         raise
 
 
@@ -234,10 +282,8 @@ def scheduler_loop():
                 if job.get("enabled") and job.get("schedule_time") == now_hm:
                     try:
                         run_collect_for(conn, job["utility_type"], "scheduled")
-                    except Exception as exc:
-                        message = user_message(job["utility_type"], exc)
-                        mark_collected(conn, job["utility_type"], False, message)
-                        insert_log(conn, "error", f"{job['utility_type']}-collector", message, {"raw": str(exc)})
+                    except Exception:
+                        pass
             conn.close()
         except Exception:
             pass
@@ -303,7 +349,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/analytics":
             return self.redirect("/analytics.html")
         if path == "/healthz":
-            return self.json(200, {"ok": True, "app": "home-utility-ledger-standalone", "version": "standalone-2026.05.16-responsive-tabs"})
+            return self.json(200, {"ok": True, "app": "home-utility-ledger-standalone", "version": "standalone-2026.05.16-log-diagnosis"})
         if path == "/api/me":
             return self.json(200, {"ok": True, "authenticated": self.authed()})
         if path == "/login.html":
@@ -426,7 +472,7 @@ class Handler(BaseHTTPRequestHandler):
                 except Exception as exc:
                     message = user_message(utility_type, exc)
                     update_account_test(conn, utility_type, False, message)
-                    insert_log(conn, "error", f"{utility_type}-test", message, {"raw": str(exc)})
+                    insert_log(conn, "error", f"{utility_type}-test", message, error_log_details(utility_type, exc))
                     return self.json(400, {"ok": False, "message": message})
                 finally:
                     conn.close()
@@ -436,10 +482,7 @@ class Handler(BaseHTTPRequestHandler):
                 try:
                     return self.json(200, run_collect_for(conn, utility_type, "manual"))
                 except Exception as exc:
-                    message = user_message(utility_type, exc)
-                    mark_collected(conn, utility_type, False, message)
-                    insert_log(conn, "error", f"{utility_type}-collector", message, {"raw": str(exc)})
-                    return self.json(400, {"ok": False, "message": message})
+                    return self.json(400, {"ok": False, "message": user_message(utility_type, exc)})
                 finally:
                     conn.close()
             if path == "/api/settings":

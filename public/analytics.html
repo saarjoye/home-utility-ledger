@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>费用详情 - 家庭能源账本</title>
-    <link rel="stylesheet" href="/styles.css?v=20260516-period-nav">
+    <link rel="stylesheet" href="/styles.css?v=20260516-inline-custom-range">
   </head>
   <body>
     <div class="mobile-detail detail-shell">
@@ -51,6 +51,14 @@
             <option value="100">每页 100 条</option>
           </select>
         </div>
+        <div class="inline-custom-range" id="detailCustomRange" hidden>
+          <strong>自定义统计时段</strong>
+          <div>
+            <label>开始日期<input class="input" id="detailCustomStart" type="date"></label>
+            <label>结束日期<input class="input" id="detailCustomEnd" type="date"></label>
+          </div>
+          <button class="btn" id="applyDetailCustomRange" type="button">应用自定义时段</button>
+        </div>
       </section>
 
       <section class="detail-card" id="detailCalendarCard">
@@ -84,22 +92,7 @@
       </section>
     </div>
 
-    <dialog class="range-dialog" id="rangeDialog">
-      <form method="dialog" class="dialog-card">
-        <button class="dialog-close" value="cancel">×</button>
-        <h2>选择自定义时间</h2>
-        <p class="helper">用于总览统计、详情趋势和账单列表。水费/燃气按账期归属统计，电费按日用电记录统计。</p>
-        <label>开始日期<input class="input" id="customStart" type="date"></label>
-        <label>结束日期<input class="input" id="customEnd" type="date"></label>
-        <div class="notice-line">自定义范围最大支持 2 年，避免接口与页面加载过慢。</div>
-        <div class="dialog-actions">
-          <button class="btn secondary" value="cancel">取消</button>
-          <button class="btn" id="applyCustomRange" value="default">应用筛选</button>
-        </div>
-      </form>
-    </dialog>
-
     <div class="toast" id="toast"></div>
-    <script src="/app.js?v=20260516-period-nav"></script>
+    <script src="/app.js?v=20260516-inline-custom-range"></script>
   </body>
 </html>

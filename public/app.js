@@ -253,6 +253,10 @@ function wireRangeTabs(rootSelector, onChange) {
   root.querySelectorAll("button").forEach((btn) => {
     btn.onclick = () => {
       const period = btn.dataset.period;
+      if (period === "custom" && rootSelector === "#detailRangeTabs") {
+        openInlineCustomRange(onChange);
+        return;
+      }
       if (period === "custom") {
         openRangeDialog(onChange);
         return;
@@ -261,10 +265,40 @@ function wireRangeTabs(rootSelector, onChange) {
       state.start = "";
       state.end = "";
       state.anchorDate = today;
+      document.querySelector("#detailCustomRange")?.setAttribute("hidden", "");
       root.querySelectorAll("button").forEach((item) => item.classList.toggle("active", item === btn));
       onChange(period);
     };
   });
+}
+
+function openInlineCustomRange(onApply) {
+  const panel = document.querySelector("#detailCustomRange");
+  const start = document.querySelector("#detailCustomStart");
+  const end = document.querySelector("#detailCustomEnd");
+  const apply = document.querySelector("#applyDetailCustomRange");
+  if (!panel || !start || !end || !apply) return;
+  const range = state.start && state.end ? rangeFor("custom") : rangeFor("month");
+  start.value = state.start || range.start;
+  end.value = state.end || range.end;
+  panel.hidden = false;
+  start.focus();
+  apply.onclick = () => {
+    if (!start.value || !end.value) {
+      showToast("请选择开始日期和结束日期");
+      return;
+    }
+    if (start.value > end.value) {
+      showToast("开始日期不能晚于结束日期");
+      return;
+    }
+    state.period = "custom";
+    state.start = start.value;
+    state.end = end.value;
+    state.anchorDate = new Date(start.value);
+    document.querySelectorAll("#detailRangeTabs button").forEach((btn) => btn.classList.toggle("active", btn.dataset.period === "custom"));
+    onApply?.("custom");
+  };
 }
 
 function openRangeDialog(onApply) {

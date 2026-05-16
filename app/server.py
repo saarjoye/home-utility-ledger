@@ -140,11 +140,41 @@ def local_check_for(conn, utility_type: str) -> dict:
 def collection_log_details(result: dict, inserted: int, daily_count: int) -> dict:
     bills = result.get("bills") or []
     daily = result.get("daily") or []
+
+    def amount_value(value):
+        return None if value is None or value == "" else value
+
+    bill_rows = [
+        {
+            "date": row.get("statementDate") or row.get("periodEnd") or row.get("periodStart") or "",
+            "periodStart": row.get("periodStart") or "",
+            "periodEnd": row.get("periodEnd") or "",
+            "usage": row.get("usageValue"),
+            "unit": row.get("usageUnit") or "",
+            "amount": amount_value(row.get("amount")),
+            "status": row.get("status") or row.get("recordType") or "confirmed",
+            "source": row.get("sourceChannel") or "",
+        }
+        for row in bills[:50]
+    ]
+    daily_rows = [
+        {
+            "date": row.get("usageDate") or "",
+            "usage": row.get("usageValue"),
+            "unit": row.get("usageUnit") or "",
+            "amount": amount_value(row.get("amount")),
+            "status": "amount_pending" if row.get("amount") in (None, "") else "confirmed",
+            "source": row.get("sourceChannel") or "",
+        }
+        for row in daily[:80]
+    ]
     return {
         "billsReceived": len(bills),
         "billsInserted": inserted,
         "dailyReceived": len(daily),
         "dailyInserted": daily_count,
+        "billRows": bill_rows,
+        "dailyRows": daily_rows,
         "billDates": [row.get("statementDate") for row in bills[:8] if row.get("statementDate")],
         "dailyDates": [row.get("usageDate") for row in daily[:8] if row.get("usageDate")],
         "amounts": [row.get("amount") for row in bills[:8] if row.get("amount") is not None],
@@ -273,7 +303,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/analytics":
             return self.redirect("/analytics.html")
         if path == "/healthz":
-            return self.json(200, {"ok": True, "app": "home-utility-ledger-standalone", "version": "standalone-2026.05.16-log"})
+            return self.json(200, {"ok": True, "app": "home-utility-ledger-standalone", "version": "standalone-2026.05.16-logdetail"})
         if path == "/api/me":
             return self.json(200, {"ok": True, "authenticated": self.authed()})
         if path == "/login.html":

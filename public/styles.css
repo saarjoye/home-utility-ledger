@@ -322,6 +322,19 @@ body[data-detail="gas"] .hero-amount strong, body[data-detail="gas"] .detail-met
 .log-row div { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
 .log-row span, .log-row small, .log-row em { color: var(--muted); font-style: normal; line-height: 1.55; }
 .log-row p { font-weight: 900; }
+.log-detail-table { display: grid; gap: 8px; }
+.log-detail-row {
+  display: grid;
+  grid-template-columns: 64px 110px minmax(120px, 1fr) 110px minmax(120px, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid rgba(16, 24, 40, 0.08);
+  border-radius: 12px;
+  background: white;
+}
+.log-detail-row strong { color: var(--blue); }
+.log-detail-row small { text-align: right; }
 .data-note { margin: -4px 0 14px; padding: 12px 14px; border-radius: 14px; background: #f1f7ff; }
 .input, textarea {
   width: 100%;
@@ -372,4 +385,6 @@ textarea[readonly] { cursor: pointer; }
   .login-page { grid-template-columns: 1fr; padding: 16px; }
   .login-hero { min-height: 420px; }
   .login-hero h1 { font-size: 34px; margin-top: 60px; }
+  .log-detail-row { grid-template-columns: 1fr; }
+  .log-detail-row small { text-align: left; }
 }

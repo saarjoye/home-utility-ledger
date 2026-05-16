@@ -467,17 +467,43 @@ function logRow(row) {
     details.billsInserted !== undefined ? `新增账单 ${details.billsInserted} 条` : "",
     details.dailyInserted !== undefined ? `新增日数据 ${details.dailyInserted} 条` : "",
   ].filter(Boolean).join(" · ");
-  const dates = [
-    details.billDates?.length ? `账单日期：${details.billDates.join("、")}` : "",
-    details.dailyDates?.length ? `日数据：${details.dailyDates.join("、")}` : "",
-    details.raw ? `错误摘要：${String(details.raw).slice(0, 180)}` : "",
-  ].filter(Boolean).join("<br>");
+  const rowsHtml = renderLogDetailRows(details);
+  const errorText = details.raw ? `<small>错误摘要：${String(details.raw).slice(0, 180)}</small>` : "";
   return `<article class="log-row ${row.level}">
     <div><b>${row.module}</b><span>${formatDateTime(row.created_at)}</span></div>
     <p>${row.message}</p>
     ${counts ? `<em>${counts}</em>` : ""}
-    ${dates ? `<small>${dates}</small>` : ""}
+    ${rowsHtml}
+    ${errorText}
   </article>`;
+}
+
+function renderLogDetailRows(details) {
+  const billRows = details.billRows || [];
+  const dailyRows = details.dailyRows || [];
+  if (!billRows.length && !dailyRows.length) {
+    const dates = [
+      details.billDates?.length ? `账单日期：${details.billDates.join("、")}` : "",
+      details.dailyDates?.length ? `日数据：${details.dailyDates.join("、")}` : "",
+    ].filter(Boolean).join("<br>");
+    return dates ? `<small>${dates}</small>` : "";
+  }
+  const billHtml = billRows.map((item) => logDetailItem("账单", item)).join("");
+  const dailyHtml = dailyRows.map((item) => logDetailItem("日用量", item)).join("");
+  return `<div class="log-detail-table">${billHtml}${dailyHtml}</div>`;
+}
+
+function logDetailItem(label, item) {
+  const usage = item.usage === null || item.usage === undefined || item.usage === "" ? "--" : `${fmt(item.usage)} ${item.unit || ""}`.trim();
+  const amount = item.amount === null || item.amount === undefined || item.amount === "" ? "费用待出账" : money(item.amount);
+  const status = item.status === "amount_pending" ? "待出账" : item.status || "已确认";
+  return `<div class="log-detail-row">
+    <span>${label}</span>
+    <b>${item.date || "--"}</b>
+    <span>用量 ${usage}</span>
+    <strong>${amount}</strong>
+    <small>${status}${item.source ? ` · ${item.source}` : ""}</small>
+  </div>`;
 }
 
 function providerCard(account) {

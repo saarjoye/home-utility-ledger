@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>费用详情 - 家庭能源账本</title>
-    <link rel="stylesheet" href="/styles.css?v=20260517-cooldown-logs">
+    <link rel="stylesheet" href="/styles.css?v=20260517-operational-ui">
   </head>
   <body>
     <div class="mobile-detail detail-shell">
@@ -19,6 +19,8 @@
         <div class="kv-row"><span>当前账期</span><b id="detailPeriod">--</b></div>
         <div class="hero-amount"><span id="detailAmountLabel">本期费用</span><strong id="detailAmount">¥ 0.00</strong></div>
       </section>
+
+      <section class="detail-status-strip" id="detailStatusStrip"></section>
 
       <section class="detail-metrics" id="detailMetrics"></section>
 
@@ -93,6 +95,6 @@
     </div>
 
     <div class="toast" id="toast"></div>
-    <script src="/app.js?v=20260517-cooldown-logs"></script>
+    <script src="/app.js?v=20260517-operational-ui"></script>
   </body>
 </html>

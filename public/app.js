@@ -126,6 +126,7 @@ function periodNavMeta() {
 
 function shiftPeriod(direction) {
   const step = direction < 0 ? -1 : 1;
+  if (state.period === "all" || state.period === "custom") return;
   if (state.period === "day") state.anchorDate = new Date(state.anchorDate.getFullYear(), state.anchorDate.getMonth(), state.anchorDate.getDate() + step);
   else if (state.period === "week") state.anchorDate = new Date(state.anchorDate.getFullYear(), state.anchorDate.getMonth(), state.anchorDate.getDate() + step * 7);
   else if (state.period === "quarter") state.anchorDate = addMonths(state.anchorDate, step * 3);
@@ -247,6 +248,44 @@ function providerIdentity(account) {
   return "已保存授权";
 }
 
+function providerFromModule(module = "") {
+  if (module.includes("electricity")) return "electricity";
+  if (module.includes("water")) return "water";
+  if (module.includes("gas")) return "gas";
+  return "";
+}
+
+function collectionState(account = {}) {
+  const local = account.localData || {};
+  const run = local.todayRun || {};
+  if (!account.configured) return { tone: "muted", title: "未接入", desc: "请先完成账号授权" };
+  if (run.status === "success") {
+    return {
+      tone: "ok",
+      title: "今日已记录",
+      desc: `新增账单 ${run.bills_inserted || 0} 条，日数据 ${run.daily_inserted || 0} 条`,
+    };
+  }
+  if (run.status === "error") {
+    const next = account.utility_type === "electricity" ? estimateNextAllowed(run.finished_at || run.started_at, 24) : "";
+    return {
+      tone: "warn",
+      title: account.utility_type === "electricity" ? "冷却保护中" : "需要处理",
+      desc: next ? `下次建议 ${formatDateTime(next)} 后再试` : (run.message || "请查看采集日志"),
+    };
+  }
+  if (run.status === "running") return { tone: "running", title: "正在采集", desc: "任务执行中，请稍后刷新" };
+  return { tone: "ready", title: "等待采集", desc: "页面读取本地落盘数据，不会反复请求官方接口" };
+}
+
+function estimateNextAllowed(value, hours = 24) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  date.setHours(date.getHours() + hours);
+  return date.toISOString();
+}
+
 function wireRangeTabs(rootSelector, onChange) {
   const root = document.querySelector(rootSelector);
   if (!root) return;
@@ -258,7 +297,7 @@ function wireRangeTabs(rootSelector, onChange) {
         return;
       }
       if (period === "custom") {
-        openRangeDialog(onChange);
+        openDashboardCustomRange(onChange);
         return;
       }
       state.period = period;
@@ -266,6 +305,7 @@ function wireRangeTabs(rootSelector, onChange) {
       state.end = "";
       state.anchorDate = today;
       document.querySelector("#detailCustomRange")?.setAttribute("hidden", "");
+      document.querySelector("#dashboardCustomRange")?.setAttribute("hidden", "");
       root.querySelectorAll("button").forEach((item) => item.classList.toggle("active", item === btn));
       onChange(period);
     };
@@ -301,23 +341,33 @@ function openInlineCustomRange(onApply) {
   };
 }
 
-function openRangeDialog(onApply) {
-  const dialog = document.querySelector("#rangeDialog");
-  if (!dialog) return;
+function openDashboardCustomRange(onApply) {
+  const panel = document.querySelector("#dashboardCustomRange");
+  const start = document.querySelector("#dashboardCustomStart");
+  const end = document.querySelector("#dashboardCustomEnd");
+  const apply = document.querySelector("#applyDashboardCustomRange");
+  if (!panel || !start || !end || !apply) return;
   const range = rangeFor("month");
-  document.querySelector("#customStart").value = state.start || range.start;
-  document.querySelector("#customEnd").value = state.end || range.end;
-  document.querySelector("#applyCustomRange").onclick = (event) => {
-    event.preventDefault();
+  start.value = state.start || range.start;
+  end.value = state.end || range.end;
+  panel.hidden = false;
+  start.focus();
+  apply.onclick = () => {
+    if (!start.value || !end.value) {
+      showToast("请选择开始日期和结束日期");
+      return;
+    }
+    if (start.value > end.value) {
+      showToast("开始日期不能晚于结束日期");
+      return;
+    }
     state.period = "custom";
-    state.start = document.querySelector("#customStart").value;
-    state.end = document.querySelector("#customEnd").value;
+    state.start = start.value;
+    state.end = end.value;
     state.anchorDate = state.start ? new Date(state.start) : today;
-    dialog.close();
     document.querySelectorAll(".range-tabs button").forEach((btn) => btn.classList.toggle("active", btn.dataset.period === "custom"));
     onApply("custom");
   };
-  dialog.showModal();
 }
 
 async function initDashboard() {
@@ -326,8 +376,14 @@ async function initDashboard() {
   renderDashboard(state.overview);
   bindDashboardViewTabs(state.overview);
   wireRangeTabs("#rangeTabs", () => renderDashboard(state.overview));
-  document.querySelector("#prevRange").onclick = () => showToast("当前版本先按已落盘数据筛选，上一周期快捷切换稍后开放。");
-  document.querySelector("#nextRange").onclick = () => showToast("当前版本先按已落盘数据筛选，下一周期快捷切换稍后开放。");
+  document.querySelector("#prevRange").onclick = () => {
+    shiftPeriod(-1);
+    renderDashboard(state.overview);
+  };
+  document.querySelector("#nextRange").onclick = () => {
+    shiftPeriod(1);
+    renderDashboard(state.overview);
+  };
   document.querySelector("#collectAll").onclick = collectAll;
 }
 
@@ -347,9 +403,30 @@ function renderDashboard(data) {
   document.querySelector("#lastCollect").textContent = `最后采集 ${latestRun(accounts)}`;
 
   renderSideStatus(accounts);
+  renderTrustStrip(accounts, data);
   renderSummaryCards(summary);
   renderDashboardMainPanel(data);
   bindBillTabs(data);
+}
+
+function renderTrustStrip(accounts, data) {
+  const root = document.querySelector("#trustStrip");
+  if (!root) return;
+  const localBills = Object.values(data.allBillsByType || data.billsByType || {}).flat().length;
+  const dailyCount = (data.dailyUsage || []).length;
+  const electricity = accounts.find((item) => item.utility_type === "electricity") || {};
+  const electricState = collectionState(electricity);
+  const successCount = accounts.filter((item) => collectionState(item).tone === "ok").length;
+  const items = [
+    ["本地账本", "正常读取", `已落盘账单 ${localBills} 条，日数据 ${dailyCount} 条`, "ok"],
+    ["国网状态", electricState.title, electricState.desc, electricState.tone],
+    ["今日同步", `${successCount}/3 个渠道已完成`, `最后采集 ${latestRun(accounts)}`, successCount === 3 ? "ok" : "ready"],
+  ];
+  root.innerHTML = items.map(([label, title, desc, tone]) => `<article class="trust-item ${tone}">
+    <span>${label}</span>
+    <strong>${title}</strong>
+    <p>${desc}</p>
+  </article>`).join("");
 }
 
 function renderSideStatus(accounts) {
@@ -659,6 +736,7 @@ function renderDetail(data) {
   syncPeriodNavigator();
   renderDetailMetrics(type, summary, data);
   renderDetailInfo(type, account, summary);
+  renderDetailStatus(account, type);
   renderDetailAvailability(type);
   renderCalendar(data.dailyUsage || []);
   document.querySelector("#detailCalendarCard").hidden = type !== "electricity";
@@ -668,6 +746,27 @@ function renderDetail(data) {
     : baseRows.slice(0, 24).reverse().map((row) => [periodLabel(row, type), Number(row.amount || 0)]);
   renderBars("#analyticsBars", trendRows, accents[type]);
   renderDetailBills(type, visibleRows, allRows.length, filteredRows.length, baseRows.length);
+}
+
+function renderDetailStatus(account = {}, type = "electricity") {
+  const root = document.querySelector("#detailStatusStrip");
+  if (!root) return;
+  const local = account.localData || {};
+  const auth = account.authStatus || {};
+  const run = local.todayRun || {};
+  const current = collectionState(account);
+  const next = current.tone === "warn" && type === "electricity" ? current.desc : "按计划每日采集一次";
+  const rows = [
+    ["渠道状态", current.title, current.desc, current.tone],
+    ["最后授权", formatDateTime(auth.authorizedAt), auth.expiresText || "失效后重新导入", "ready"],
+    ["本地数据", `账单 ${local.billCount || 0} 条`, `日数据 ${local.dailyCount || 0} 条，最新 ${local.latestBillDate || local.latestDailyDate || "--"}`, "ok"],
+    ["执行节奏", run.status ? `今日 ${run.status}` : "今日未执行", next, current.tone],
+  ];
+  root.innerHTML = rows.map(([label, title, desc, tone]) => `<article class="trust-item ${tone}">
+    <span>${label}</span>
+    <strong>${title || "--"}</strong>
+    <p>${desc || "--"}</p>
+  </article>`).join("");
 }
 
 function renderDetailAvailability(type) {
@@ -744,6 +843,9 @@ async function initAdmin() {
   const accounts = await api("/api/accounts");
   const settings = await api("/api/settings");
   providerRoot.innerHTML = accounts.map((account) => providerCard(account)).join("");
+  renderRunQueue(accounts, settings);
+  renderSecuritySummary(accounts);
+  renderAdminAlert(accounts);
   document.querySelector("#jobsForm").innerHTML = (settings.jobs || []).map((job) => `<label>${names[job.utility_type]}采集时间<input class="input job-time" data-type="${job.utility_type}" value="${job.schedule_time || "07:30"}"></label>`).join("");
   document.querySelector("#wecomWebhook").value = settings.wecom_webhook || "";
   document.querySelector("#pushDaily").checked = settings.push_daily_summary === "true";
@@ -752,6 +854,12 @@ async function initAdmin() {
   bindElectricityHistoryImport();
   await loadLogs();
   document.querySelector("#refreshLogs").onclick = loadLogs;
+  document.querySelector("#refreshAdmin").onclick = () => location.reload();
+  ["#logLevelFilter", "#logProviderFilter", "#logSearch"].forEach((selector) => {
+    const node = document.querySelector(selector);
+    if (node) node.oninput = loadLogs;
+    if (node) node.onchange = loadLogs;
+  });
   document.querySelector("#saveSettings").onclick = async () => {
     const jobs = [...document.querySelectorAll(".job-time")].map((input) => ({ utility_type: input.dataset.type, enabled: true, schedule_time: input.value || "07:30" }));
     await api("/api/settings", { method: "POST", body: JSON.stringify({ jobs, wecom_webhook: document.querySelector("#wecomWebhook").value, push_daily_summary: document.querySelector("#pushDaily").checked, push_failure_alert: document.querySelector("#pushFailure").checked }) });
@@ -759,19 +867,86 @@ async function initAdmin() {
   };
 }
 
+function renderRunQueue(accounts = [], settings = {}) {
+  const root = document.querySelector("#runQueue");
+  if (!root) return;
+  const jobs = Object.fromEntries((settings.jobs || []).map((job) => [job.utility_type, job]));
+  root.innerHTML = ["electricity", "water", "gas"].map((type) => {
+    const account = accounts.find((item) => item.utility_type === type) || { utility_type: type };
+    const run = account.localData?.todayRun || {};
+    const job = jobs[type] || {};
+    const current = collectionState(account);
+    return `<div class="queue-item ${current.tone}">
+      <span>${names[type]}</span>
+      <b>${current.title}</b>
+      <small>计划 ${job.schedule_time || "07:30"} · ${run.finished_at ? `完成 ${formatDateTime(run.finished_at)}` : current.desc}</small>
+    </div>`;
+  }).join("");
+}
+
+function renderAdminAlert(accounts = []) {
+  const root = document.querySelector("#adminAlert");
+  if (!root) return;
+  const electricity = accounts.find((item) => item.utility_type === "electricity");
+  const electricState = collectionState(electricity || {});
+  if (electricState.tone === "warn") {
+    root.textContent = `国网当前处于保护状态：${electricState.desc}。页面会继续读取本地落盘数据，避免在风控期重复登录。`;
+    root.classList.add("warn");
+    return;
+  }
+  const failed = accounts.filter((item) => collectionState(item).tone === "warn");
+  root.textContent = failed.length
+    ? `有 ${failed.length} 个渠道需要处理，请先查看采集日志中的失败原因，再决定是否重新授权。`
+    : "三费数据以本地账本为准；后台每日采集一次并记录详细日志，失败后会显示下次建议执行时间。";
+  root.classList.toggle("warn", failed.length > 0);
+}
+
+function renderSecuritySummary(accounts = []) {
+  const root = document.querySelector("#securitySummary");
+  if (!root) return;
+  const configured = accounts.filter((item) => item.configured).length;
+  const localBills = accounts.reduce((sum, item) => sum + Number(item.localData?.billCount || 0), 0);
+  const localDaily = accounts.reduce((sum, item) => sum + Number(item.localData?.dailyCount || 0), 0);
+  const reauth = accounts.filter((item) => item.authStatus?.needsReauth).length;
+  const items = [
+    ["接入渠道", `${configured}/3`, "仅展示脱敏户号"],
+    ["本地账单", `${localBills} 条`, "用于前台统计与详情"],
+    ["日数据", `${localDaily} 条`, "目前主要来自国网"],
+    ["需处理授权", `${reauth} 个`, reauth ? "建议重新导入或等待冷却" : "暂无"],
+    ["敏感信息", "本地保存", "不要上传数据库或截图中的授权字段"],
+  ];
+  root.innerHTML = items.map(([label, value, desc]) => `<div><span>${label}</span><b>${value}</b><small>${desc}</small></div>`).join("");
+}
+
 async function loadLogs() {
   const root = document.querySelector("#logList");
   if (!root) return;
   try {
     const rows = await api("/api/logs?limit=80");
-    root.innerHTML = rows.map((row) => logRow(row)).join("") || `<p class="helper">暂无采集日志</p>`;
+    const filtered = filterLogs(rows);
+    root.innerHTML = filtered.map((row) => logRow(row)).join("") || `<p class="helper">暂无符合条件的采集日志</p>`;
   } catch (error) {
     root.innerHTML = `<p class="helper">日志读取失败：${error.message}</p>`;
   }
 }
 
+function filterLogs(rows = []) {
+  const level = document.querySelector("#logLevelFilter")?.value || "";
+  const provider = document.querySelector("#logProviderFilter")?.value || "";
+  const keyword = String(document.querySelector("#logSearch")?.value || "").trim().toLowerCase();
+  return rows.filter((row) => {
+    const rowProvider = providerFromModule(row.module || row.details?.provider || "");
+    if (level && row.level !== level) return false;
+    if (provider && rowProvider !== provider) return false;
+    if (!keyword) return true;
+    const text = JSON.stringify(row, null, 0).toLowerCase();
+    return text.includes(keyword);
+  });
+}
+
 function logRow(row) {
   const details = row.details || {};
+  const provider = providerFromModule(row.module || details.provider || "");
   const meta = renderLogMeta(row, details);
   const counts = [
     details.billsReceived !== undefined ? `账单 ${details.billsReceived} 条` : "",
@@ -787,7 +962,7 @@ function logRow(row) {
   const diagnosis = renderLogDiagnosis(details);
   const errorText = details.raw ? `<small>原始返回：${String(details.raw).slice(0, 180)}</small>` : "";
   return `<article class="log-row ${row.level}">
-    <div><b>${row.module}</b><span>${formatDateTime(row.created_at)}</span></div>
+    <div class="log-row-head"><b>${provider ? names[provider] : row.module}</b><span>${formatDateTime(row.created_at)}</span></div>
     <p>${row.message}</p>
     ${meta}
     ${counts ? `<em>${counts}</em>` : ""}
@@ -834,7 +1009,10 @@ function renderLogDetailRows(details) {
   }
   const billHtml = billRows.map((item) => logDetailItem("账单", item)).join("");
   const dailyHtml = dailyRows.map((item) => logDetailItem("日用量", item)).join("");
-  return `<div class="log-detail-table">${billHtml}${dailyHtml}</div>`;
+  return `<div class="log-detail-table">
+    <div class="log-detail-header"><span>类型</span><span>日期/账期</span><span>用量</span><span>费用</span><span>状态</span></div>
+    ${billHtml}${dailyHtml}
+  </div>`;
 }
 
 function logDetailItem(label, item) {

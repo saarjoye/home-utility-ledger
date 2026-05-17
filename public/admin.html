@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>后台接入管理 - 家庭能源账本</title>
-    <link rel="stylesheet" href="/styles.css?v=20260517-cooldown-logs">
+    <link rel="stylesheet" href="/styles.css?v=20260517-operational-ui">
   </head>
   <body>
     <div class="admin-shell">
@@ -27,9 +27,25 @@
         </aside>
 
         <section class="admin-content">
-          <div class="info-banner">授权信息有有效期。后台会显示最后授权时间和预计过期时间，过期后点击“重新授权”按提示导入即可。</div>
+          <div class="info-banner" id="adminAlert">授权信息有有效期。后台会显示最后授权时间、失败时间和下次可执行时间，避免在风控期反复触发。</div>
 
-          <section id="channels" class="provider-grid"></section>
+          <section class="admin-console-grid" id="runConsole">
+            <div class="panel-card console-main">
+              <div class="panel-head">
+                <div>
+                  <h2>运行控制台</h2>
+                  <p class="helper">这里展示三家渠道今天是否执行、拿到了多少本地数据、是否处于冷却保护。</p>
+                </div>
+                <button class="btn secondary" id="refreshAdmin" type="button">刷新状态</button>
+              </div>
+              <div class="provider-grid" id="channels"></div>
+            </div>
+
+            <aside class="panel-card queue-card">
+              <h2>今日执行队列</h2>
+              <div class="queue-list" id="runQueue"></div>
+            </aside>
+          </section>
 
           <section class="panel-card history-import-panel" id="electricityHistory">
             <div class="panel-head">
@@ -84,13 +100,37 @@
             </div>
           </section>
 
-          <section class="panel-card" id="logs">
+          <section class="panel-card log-workbench" id="logs">
             <div class="panel-head">
-              <h2>采集日志</h2>
+              <div>
+                <h2>采集日志</h2>
+                <p class="helper">重点看“执行时间、获取内容、写入结果、失败原因、下次可执行”。</p>
+              </div>
               <button class="btn secondary" id="refreshLogs" type="button">刷新日志</button>
             </div>
-            <p class="helper">这里会显示每次采集拿到几条账单、几条日数据，以及失败时的错误摘要。用于判断任务是否真的拿到了数据。</p>
-            <div class="log-list" id="logList"></div>
+            <div class="log-filter-row">
+              <select class="input" id="logLevelFilter">
+                <option value="">全部状态</option>
+                <option value="info">成功/信息</option>
+                <option value="error">失败</option>
+                <option value="warn">警告</option>
+              </select>
+              <select class="input" id="logProviderFilter">
+                <option value="">全部渠道</option>
+                <option value="electricity">国网</option>
+                <option value="water">杭水</option>
+                <option value="gas">燃气</option>
+              </select>
+              <input class="input" id="logSearch" placeholder="搜索日期、错误、账期、用量">
+            </div>
+            <div class="workbench-grid">
+              <div class="log-list" id="logList"></div>
+              <aside class="security-card">
+                <h2>数据与安全</h2>
+                <div class="security-list" id="securitySummary"></div>
+                <div class="notice-line">敏感授权信息仅保存在本地数据库；导出日志或截图前请先脱敏。</div>
+              </aside>
+            </div>
           </section>
         </section>
       </main>
@@ -123,6 +163,6 @@
     </dialog>
 
     <div class="toast" id="toast"></div>
-    <script src="/app.js?v=20260517-cooldown-logs"></script>
+    <script src="/app.js?v=20260517-operational-ui"></script>
   </body>
 </html>

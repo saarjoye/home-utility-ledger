@@ -438,6 +438,20 @@ def warning_push_message(conn, utility_type: str) -> str:
     ])
 
 
+def send_wecom_test(conn, data: dict) -> dict:
+    update_settings(conn, data)
+    settings = raw_settings(conn)
+    if not wecom.enabled(settings):
+        return {"ok": False, "message": "企业微信应用未配置：请填写 CorpId、AgentId 和 Secret"}
+    try:
+        result = wecom.send_text(settings, "家庭能源账本 · 测试消息\n企业微信应用推送已成功连接，消息通知将使用此渠道发送。")
+        insert_log(conn, "info", "wecom-app", "企业微信测试消息发送成功", result)
+        return {"ok": True, "message": "测试消息已发送，请到企业微信查看。"}
+    except wecom.WeComError as exc:
+        insert_log(conn, "error", "wecom-app", "企业微信测试消息发送失败", {"raw": str(exc)[:200]})
+        return {"ok": False, "message": str(exc)}
+
+
 def run_collect_for(conn, utility_type: str, trigger_type: str = "scheduled", force: bool = False) -> dict:
     block = cooldown_block(conn, utility_type)
     if block and not force:

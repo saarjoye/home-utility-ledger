@@ -86,17 +86,41 @@
             <div class="panel-card" id="jobs">
               <h2>采集计划</h2>
               <div class="form-grid" id="jobsForm"></div>
-              <p class="helper">建议每天只采集一次。国网登录次数有限，系统会记录当天采集状态并避免重复登录。</p>
+              <p class="helper">电费按日采集；水费/燃气只有月度账单，建议在每月 1-8 号轮询采集，避免月初出账延迟。</p>
             </div>
 
             <div class="panel-card" id="push">
-              <h2>企业微信推送</h2>
-              <div class="form-grid">
-                <label>Webhook 地址<input class="input" id="wecomWebhook" placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/..."></label>
-                <label><input type="checkbox" id="pushDaily"> 每日汇总</label>
-                <label><input type="checkbox" id="pushFailure"> 采集失败提醒</label>
+              <h2>企业微信应用推送</h2>
+              <p class="helper">使用自建应用接口推送（非机器人 Webhook）。Secret 仅本地保存，不会回显。</p>
+              <div class="form-grid wecom-app-grid">
+                <label>CorpId<input class="input" id="wecomCorpId" placeholder="企业 CorpId"></label>
+                <label>AgentId<input class="input" id="wecomAgentId" placeholder="应用 AgentId（数字）"></label>
+                <label>Secret<input class="input" id="wecomSecret" type="password" autocomplete="new-password" placeholder="留空则保留旧值"></label>
+                <label>接收人<input class="input" id="wecomToUser" placeholder="@all 或 user1|user2"></label>
               </div>
-              <button class="btn save-wide" id="saveSettings">保存配置</button>
+              <p class="helper" id="wecomSecretHint">Secret 状态：未配置</p>
+              <h3 class="form-subhead">推送内容</h3>
+              <div class="form-grid push-toggle-grid">
+                <label><input type="checkbox" id="pushCollectInfo"> 采集信息</label>
+                <label><input type="checkbox" id="pushMonthlyBill"> 月度账单</label>
+                <label><input type="checkbox" id="pushFailure"> 采集失败告警</label>
+                <label><input type="checkbox" id="pushBillWarning"> 账单预警</label>
+                <label><input type="checkbox" id="pushDaily"> 每日汇总</label>
+              </div>
+              <h3 class="form-subhead">预警规则</h3>
+              <div class="form-grid alert-rules-grid">
+                <label>电费阈值（元）<input class="input" id="alertAmountElectricity" type="number" min="0" step="1" placeholder="500"></label>
+                <label>水费阈值（元）<input class="input" id="alertAmountWater" type="number" min="0" step="1" placeholder="100"></label>
+                <label>燃气阈值（元）<input class="input" id="alertAmountGas" type="number" min="0" step="1" placeholder="200"></label>
+                <label>环比上涨告警（%）<input class="input" id="alertMomPercent" type="number" min="0" step="1" placeholder="30"></label>
+                <label>同比上涨告警（%）<input class="input" id="alertYoyPercent" type="number" min="0" step="1" placeholder="30"></label>
+                <label>水/燃气缺账单告警日<input class="input" id="alertMissingBillDay" type="number" min="1" max="28" step="1" placeholder="8"></label>
+              </div>
+              <div class="form-actions">
+                <button class="btn secondary" id="testWecomPush" type="button">发送测试消息</button>
+                <button class="btn" id="saveSettings" type="button">保存配置</button>
+              </div>
+              <div class="wecom-test-result" id="wecomTestResult"></div>
             </div>
           </section>
 

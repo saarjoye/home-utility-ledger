@@ -101,6 +101,8 @@ def migrate(conn: sqlite3.Connection) -> None:
           utility_type TEXT PRIMARY KEY,
           enabled INTEGER NOT NULL DEFAULT 1,
           schedule_time TEXT NOT NULL DEFAULT '07:30',
+          schedule_type TEXT NOT NULL DEFAULT 'daily',
+          monthly_days TEXT NOT NULL DEFAULT '',
           last_run_at TEXT,
           last_status TEXT,
           last_message TEXT,
@@ -165,6 +167,15 @@ def migrate(conn: sqlite3.Connection) -> None:
         """
     )
     conn.commit()
+    ensure_column(conn, "jobs", "schedule_type", "TEXT NOT NULL DEFAULT 'daily'")
+    ensure_column(conn, "jobs", "monthly_days", "TEXT NOT NULL DEFAULT ''")
+
+
+def ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+    cols = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+    if column not in cols:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+        conn.commit()
 
 
 def seed(conn: sqlite3.Connection) -> None:
@@ -185,17 +196,39 @@ def seed(conn: sqlite3.Connection) -> None:
         conn.execute(
             """
             INSERT OR IGNORE INTO jobs
-              (utility_type, enabled, schedule_time, updated_at)
-            VALUES (?, 1, '07:30', ?)
+              (utility_type, enabled, schedule_time, schedule_type, monthly_days, updated_at)
+            VALUES (?, 1, ?, ?, ?, ?)
             """,
-            (utility_type, now_iso()),
+            (
+                utility_type,
+                "07:30" if utility_type == "electricity" else "08:00",
+                "daily" if utility_type == "electricity" else "monthly",
+                "" if utility_type == "electricity" else "2,3,5,8",
+                now_iso(),
+            ),
         )
     conn.execute(
         """
         INSERT OR IGNORE INTO settings (key, value, updated_at)
-        VALUES ('wecom_webhook', '', ?), ('push_daily_summary', 'true', ?), ('push_failure_alert', 'true', ?)
+        VALUES
+          ('wecom_webhook', '', ?),
+          ('push_daily_summary', 'true', ?),
+          ('push_failure_alert', 'true', ?),
+          ('wecom_corp_id', '', ?),
+          ('wecom_agent_id', '', ?),
+          ('wecom_secret', '', ?),
+          ('wecom_to_user', '@all', ?),
+          ('push_collect_info', 'true', ?),
+          ('push_monthly_bill', 'true', ?),
+          ('push_bill_warning', 'true', ?),
+          ('alert_amount_electricity', '500', ?),
+          ('alert_amount_water', '100', ?),
+          ('alert_amount_gas', '200', ?),
+          ('alert_mom_percent', '30', ?),
+          ('alert_yoy_percent', '30', ?),
+          ('alert_missing_bill_day', '8', ?)
         """,
-        (now_iso(), now_iso(), now_iso()),
+        tuple(now_iso() for _ in range(16)),
     )
     conn.commit()
 
@@ -630,29 +663,97 @@ def upsert_electricity_bill_detail(conn: sqlite3.Connection, account_id: int, ro
 def get_settings(conn: sqlite3.Connection) -> dict:
     rows = conn.execute("SELECT key, value FROM settings").fetchall()
     jobs = conn.execute("SELECT * FROM jobs ORDER BY utility_type").fetchall()
-    return {
+    settings = {
         **{row["key"]: row["value"] for row in rows},
         "jobs": [dict(row) for row in jobs],
     }
+    settings["wecom_secret_configured"] = bool(settings.get("wecom_secret"))
+    settings.pop("wecom_secret", None)
+    return settings
 
 
 def update_settings(conn: sqlite3.Connection, data: dict) -> None:
-    for key in ("wecom_webhook", "push_daily_summary", "push_failure_alert"):
+    setting_keys = (
+        "wecom_webhook",
+        "push_daily_summary",
+        "push_failure_alert",
+        "wecom_corp_id",
+        "wecom_agent_id",
+        "wecom_to_user",
+        "push_collect_info",
+        "push_monthly_bill",
+        "push_bill_warning",
+        "alert_amount_electricity",
+        "alert_amount_water",
+        "alert_amount_gas",
+        "alert_mom_percent",
+        "alert_yoy_percent",
+        "alert_missing_bill_day",
+    )
+    for key in setting_keys:
         if key in data:
             conn.execute(
                 """
                 INSERT INTO settings(key, value, updated_at) VALUES(?, ?, ?)
                 ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at
                 """,
-                (key, str(data.get(key) or ""), now_iso()),
+                (key, normalize_setting_value(data.get(key)), now_iso()),
             )
+    if "wecom_secret" in data and str(data.get("wecom_secret") or "").strip():
+        conn.execute(
+            """
+            INSERT INTO settings(key, value, updated_at) VALUES('wecom_secret', ?, ?)
+            ON CONFLICT(key) DO UPDATE SET value=excluded.value, updated_at=excluded.updated_at
+            """,
+            (str(data.get("wecom_secret") or "").strip(), now_iso()),
+        )
     for job in data.get("jobs") or []:
         if job.get("utility_type") in {"electricity", "water", "gas"}:
             conn.execute(
-                "UPDATE jobs SET enabled=?, schedule_time=?, updated_at=? WHERE utility_type=?",
-                (1 if job.get("enabled") else 0, job.get("schedule_time") or "07:30", now_iso(), job["utility_type"]),
+                """
+                UPDATE jobs
+                SET enabled=?, schedule_time=?, schedule_type=?, monthly_days=?, updated_at=?
+                WHERE utility_type=?
+                """,
+                (
+                    1 if job.get("enabled") else 0,
+                    job.get("schedule_time") or ("07:30" if job.get("utility_type") == "electricity" else "08:00"),
+                    job.get("schedule_type") or ("daily" if job.get("utility_type") == "electricity" else "monthly"),
+                    normalize_monthly_days(job.get("monthly_days") or ""),
+                    now_iso(),
+                    job["utility_type"],
+                ),
             )
     conn.commit()
+
+
+def raw_settings(conn: sqlite3.Connection) -> dict:
+    rows = conn.execute("SELECT key, value FROM settings").fetchall()
+    return {row["key"]: row["value"] for row in rows}
+
+
+def normalize_setting_value(value) -> str:
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if value is None:
+        return ""
+    return str(value)
+
+
+def normalize_monthly_days(value) -> str:
+    if isinstance(value, list):
+        values = value
+    else:
+        values = str(value or "").replace("，", ",").split(",")
+    days = []
+    for item in values:
+        try:
+            day = int(str(item).strip())
+        except ValueError:
+            continue
+        if 1 <= day <= 31 and day not in days:
+            days.append(day)
+    return ",".join(str(day) for day in sorted(days))
 
 
 def create_session(conn: sqlite3.Connection, username: str, token: str, ttl_hours=168) -> None:
@@ -749,10 +850,120 @@ def overview(conn: sqlite3.Connection) -> dict:
         "accounts": accounts,
         "summary": current_by_type,
         "latestSummary": latest_by_type,
+        "comparisons": bill_comparisons(conn),
+        "warnings": bill_warnings(conn),
         "recentBills": [dict(row) for row in recent],
         "billsByType": grouped_bills,
         "dailyUsage": [dict(row) for row in daily],
     }
+
+
+def bill_comparisons(conn: sqlite3.Connection) -> dict:
+    rows = conn.execute(
+        """
+        SELECT utility_type, statement_date, usage_value, amount
+        FROM bills
+        ORDER BY utility_type, statement_date DESC, id DESC
+        """
+    ).fetchall()
+    grouped: dict[str, list[dict]] = {"electricity": [], "water": [], "gas": []}
+    seen = set()
+    for row in rows:
+        month = str(row["statement_date"] or "")[:7]
+        key = (row["utility_type"], month)
+        if not month or key in seen:
+            continue
+        seen.add(key)
+        grouped.setdefault(row["utility_type"], []).append(dict(row))
+    out = {}
+    for utility_type, items in grouped.items():
+        current = items[0] if items else {}
+        current_month = str(current.get("statement_date") or "")[:7]
+        prev = items[1] if len(items) > 1 else {}
+        prev_year_month = ""
+        if current_month:
+            try:
+                year, month = current_month.split("-")
+                prev_year_month = f"{int(year) - 1}-{month}"
+            except ValueError:
+                prev_year_month = ""
+        yoy = next((item for item in items[1:] if str(item.get("statement_date") or "").startswith(prev_year_month)), {})
+        out[utility_type] = {
+            "currentMonth": current_month,
+            "amount": current.get("amount"),
+            "usage": current.get("usage_value"),
+            "momPercent": percent_change(current.get("amount"), prev.get("amount")),
+            "yoyPercent": percent_change(current.get("amount"), yoy.get("amount")),
+            "previousAmount": prev.get("amount"),
+            "previousYearAmount": yoy.get("amount"),
+        }
+    return out
+
+
+def percent_change(current, previous):
+    try:
+        current_value = float(current)
+        previous_value = float(previous)
+    except (TypeError, ValueError):
+        return None
+    if previous_value == 0:
+        return None
+    return round((current_value - previous_value) / previous_value * 100, 2)
+
+
+def bill_warnings(conn: sqlite3.Connection) -> list[dict]:
+    settings = raw_settings(conn)
+    comparisons = bill_comparisons(conn)
+    warnings = []
+    for utility_type, item in comparisons.items():
+        amount = item.get("amount")
+        threshold = number_setting(settings, f"alert_amount_{utility_type}")
+        if threshold is not None and amount is not None and float(amount) > threshold:
+            warnings.append({
+                "utilityType": utility_type,
+                "type": "amount",
+                "level": "warning",
+                "message": f"{utility_type} 最新账单 {float(amount):.2f} 元，超过阈值 {threshold:.2f} 元",
+            })
+        mom_limit = number_setting(settings, "alert_mom_percent")
+        if mom_limit is not None and item.get("momPercent") is not None and item["momPercent"] >= mom_limit:
+            warnings.append({
+                "utilityType": utility_type,
+                "type": "mom",
+                "level": "warning",
+                "message": f"{utility_type} 环比上涨 {item['momPercent']}%",
+            })
+        yoy_limit = number_setting(settings, "alert_yoy_percent")
+        if yoy_limit is not None and item.get("yoyPercent") is not None and item["yoyPercent"] >= yoy_limit:
+            warnings.append({
+                "utilityType": utility_type,
+                "type": "yoy",
+                "level": "warning",
+                "message": f"{utility_type} 同比上涨 {item['yoyPercent']}%",
+            })
+    missing_day = int(number_setting(settings, "alert_missing_bill_day") or 0)
+    if missing_day and datetime.now().day >= missing_day:
+        current_month = datetime.now().strftime("%Y-%m")
+        for utility_type in ("water", "gas"):
+            month = comparisons.get(utility_type, {}).get("currentMonth") or ""
+            if month != current_month:
+                warnings.append({
+                    "utilityType": utility_type,
+                    "type": "missing",
+                    "level": "warning",
+                    "message": f"{utility_type} {current_month} 月账单尚未入库",
+                })
+    return warnings
+
+
+def number_setting(settings: dict, key: str):
+    value = settings.get(key)
+    if value in (None, ""):
+        return None
+    try:
+        return float(value)
+    except ValueError:
+        return None
 
 
 def analytics(conn: sqlite3.Connection, period: str = "month", start: str = "", end: str = "") -> dict:

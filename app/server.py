@@ -13,7 +13,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import collectors
+from . import collectors, wecom
 from .history_import import normalize_history, parse_base64_xlsx, template_rows, write_xlsx
 from .db import (
     analytics,
@@ -25,6 +25,7 @@ from .db import (
     get_collection_run,
     get_session,
     get_settings,
+    raw_settings,
     insert_log,
     list_logs,
     list_accounts,
@@ -70,6 +71,12 @@ UTILITY_LABELS = {
     "electricity": "国网浙江电力",
     "water": "杭州市水务",
     "gas": "杭州天然气",
+}
+
+SHORT_LABELS = {
+    "electricity": "电费",
+    "water": "水费",
+    "gas": "燃气",
 }
 
 SGCC_ERROR_HINTS = {
@@ -326,6 +333,111 @@ def import_electricity_history(conn, content_base64: str) -> dict:
     return summary
 
 
+def should_run_job(job: dict, now: datetime) -> bool:
+    if not job.get("enabled"):
+        return False
+    if job.get("schedule_time") != now.strftime("%H:%M"):
+        return False
+    if (job.get("schedule_type") or "daily") == "monthly":
+        days = parse_monthly_days(job.get("monthly_days") or "")
+        return now.day in days
+    return True
+
+
+def parse_monthly_days(value: str) -> set[int]:
+    out = set()
+    for item in str(value or "").replace("，", ",").split(","):
+        try:
+            day = int(item.strip())
+        except ValueError:
+            continue
+        if 1 <= day <= 31:
+            out.add(day)
+    return out or {2}
+
+
+def push_after_collect(conn, utility_type: str, ok: bool, message: str, inserted: int = 0, daily_count: int = 0, skipped: bool = False) -> None:
+    settings = raw_settings(conn)
+    if not wecom.enabled(settings):
+        return
+    try:
+        if ok and settings.get("push_collect_info", "true") == "true":
+            wecom.send_text(settings, collection_push_message(conn, utility_type, message, inserted, daily_count, skipped))
+        if ok and inserted and settings.get("push_monthly_bill", "true") == "true":
+            bill_message = monthly_bill_push_message(conn, utility_type)
+            if bill_message:
+                wecom.send_text(settings, bill_message)
+        if not ok and settings.get("push_failure_alert", "true") == "true":
+            wecom.send_text(settings, failure_push_message(utility_type, message))
+        if settings.get("push_bill_warning", "true") == "true":
+            warning_message = warning_push_message(conn, utility_type)
+            if warning_message:
+                wecom.send_text(settings, warning_message)
+    except Exception as exc:
+        insert_log(conn, "error", "wecom-app", "企业微信应用推送失败", {
+            "provider": "企业微信应用",
+            "stage": "消息发送",
+            "exceptionType": exc.__class__.__name__,
+            "executedAt": datetime.now().isoformat(timespec="seconds"),
+            "suggestion": "请检查企业微信 CorpId、AgentId、Secret、接收人和应用可见范围。Secret 不会在日志中显示。",
+            "raw": str(exc)[:200],
+        })
+
+
+def collection_push_message(conn, utility_type: str, message: str, inserted: int, daily_count: int, skipped: bool = False) -> str:
+    local = local_data_status(conn, utility_type)
+    return "\n".join([
+        "家庭能源账本 · 采集信息",
+        f"渠道：{SHORT_LABELS.get(utility_type, utility_type)}",
+        f"状态：{'已跳过外部请求' if skipped else '采集完成'}",
+        f"结果：{message}",
+        f"新增账单：{inserted} 条",
+        f"新增日数据：{daily_count} 条",
+        f"本地账单：{local.get('billCount', 0)} 条，最新 {local.get('latestBillDate') or '--'}",
+    ])
+
+
+def failure_push_message(utility_type: str, message: str) -> str:
+    return "\n".join([
+        "家庭能源账本 · 失败告警",
+        f"渠道：{SHORT_LABELS.get(utility_type, utility_type)}",
+        f"时间：{datetime.now().isoformat(timespec='seconds')}",
+        f"原因：{message}",
+        "建议：不要反复手动测试；请查看后台采集日志和下次可执行时间。",
+    ])
+
+
+def monthly_bill_push_message(conn, utility_type: str) -> str:
+    overview_data = overview(conn)
+    summary = (overview_data.get("latestSummary") or {}).get(utility_type) or {}
+    compare = (overview_data.get("comparisons") or {}).get(utility_type) or {}
+    if not summary:
+        return ""
+    lines = [
+        "家庭能源账本 · 月度账单",
+        f"渠道：{SHORT_LABELS.get(utility_type, utility_type)}",
+        f"账期：{str(summary.get('statementDate') or compare.get('currentMonth') or '--')[:7]}",
+        f"费用：¥{float(summary.get('amount') or 0):.2f}",
+        f"用量：{float(summary.get('usage') or 0):.2f}",
+    ]
+    if compare.get("momPercent") is not None:
+        lines.append(f"环比：{compare['momPercent']}%")
+    if compare.get("yoyPercent") is not None:
+        lines.append(f"同比：{compare['yoyPercent']}%")
+    return "\n".join(lines)
+
+
+def warning_push_message(conn, utility_type: str) -> str:
+    warnings = [item for item in overview(conn).get("warnings") or [] if item.get("utilityType") == utility_type]
+    if not warnings:
+        return ""
+    return "\n".join([
+        "家庭能源账本 · 账单预警",
+        f"渠道：{SHORT_LABELS.get(utility_type, utility_type)}",
+        *[item.get("message", "") for item in warnings[:5]],
+    ])
+
+
 def run_collect_for(conn, utility_type: str, trigger_type: str = "scheduled", force: bool = False) -> dict:
     block = cooldown_block(conn, utility_type)
     if block and not force:
@@ -339,6 +451,7 @@ def run_collect_for(conn, utility_type: str, trigger_type: str = "scheduled", fo
             "local": local_data_status(conn, utility_type),
         }
         insert_log(conn, "info", f"{utility_type}-collector", message, details)
+        push_after_collect(conn, utility_type, True, message, skipped=True)
         return {
             "ok": True,
             "skipped": True,
@@ -384,12 +497,14 @@ def run_collect_for(conn, utility_type: str, trigger_type: str = "scheduled", fo
         mark_collected(conn, utility_type, True, message)
         finish_collection_run(conn, utility_type, True, message, inserted, daily_count)
         insert_log(conn, "info", f"{utility_type}-collector", message, collection_log_details(utility_type, result, inserted, daily_count))
+        push_after_collect(conn, utility_type, True, message, inserted=inserted, daily_count=daily_count)
         return {"ok": True, "message": message, "inserted": inserted, "daily": daily_count}
     except Exception as exc:
         message = user_message(utility_type, exc)
         mark_collected(conn, utility_type, False, message)
         finish_collection_run(conn, utility_type, False, message, inserted, daily_count)
         insert_log(conn, "error", f"{utility_type}-collector", message, error_log_details(utility_type, exc))
+        push_after_collect(conn, utility_type, False, message, inserted=inserted, daily_count=daily_count)
         raise
 
 
@@ -398,9 +513,9 @@ def scheduler_loop():
         try:
             conn = connect()
             settings = get_settings(conn)
-            now_hm = datetime.now().strftime("%H:%M")
+            now = datetime.now()
             for job in settings.get("jobs") or []:
-                if job.get("enabled") and job.get("schedule_time") == now_hm:
+                if should_run_job(job, now):
                     try:
                         run_collect_for(conn, job["utility_type"], "scheduled")
                     except Exception:
@@ -639,6 +754,13 @@ class Handler(BaseHTTPRequestHandler):
                 try:
                     update_settings(conn, data)
                     return self.json(200, {"ok": True, "message": "配置已保存"})
+                finally:
+                    conn.close()
+            if path == "/api/settings/wecom-test":
+                data = parse_json_body(self)
+                conn = self.db()
+                try:
+                    return self.json(200, send_wecom_test(conn, data))
                 finally:
                     conn.close()
         except Exception as exc:

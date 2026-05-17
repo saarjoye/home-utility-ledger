@@ -404,9 +404,35 @@ function renderDashboard(data) {
 
   renderSideStatus(accounts);
   renderTrustStrip(accounts, data);
-  renderSummaryCards(summary);
+  renderWarningBanner(data.warnings || []);
+  renderSummaryCards(summary, data.comparisons || {});
   renderDashboardMainPanel(data);
   bindBillTabs(data);
+}
+
+function renderWarningBanner(warnings) {
+  const root = document.querySelector("#warningBanner");
+  if (!root) return;
+  if (!Array.isArray(warnings) || !warnings.length) {
+    root.hidden = true;
+    root.innerHTML = "";
+    return;
+  }
+  root.hidden = false;
+  root.innerHTML = `<h2>账单预警</h2><ul>${warnings.map((item) => `<li class="warn-${item.type || "info"}"><b>${names[item.utilityType] || item.utilityType}</b><span>${item.message || ""}</span></li>`).join("")}</ul>`;
+}
+
+function renderDetailWarnings(type, warnings) {
+  const root = document.querySelector("#detailWarningBanner");
+  if (!root) return;
+  const items = (warnings || []).filter((item) => item.utilityType === type);
+  if (!items.length) {
+    root.hidden = true;
+    root.innerHTML = "";
+    return;
+  }
+  root.hidden = false;
+  root.innerHTML = `<h2>${names[type] || type} 预警</h2><ul>${items.map((item) => `<li class="warn-${item.type || "info"}"><span>${item.message || ""}</span></li>`).join("")}</ul>`;
 }
 
 function renderTrustStrip(accounts, data) {
@@ -454,6 +480,17 @@ function billDateLabel(item = {}) {
   return item.statementDate ? String(item.statementDate).slice(0, 7) : "--";
 }
 
+function comparisonBadges(compare = {}) {
+  const items = [];
+  if (compare.momPercent !== null && compare.momPercent !== undefined) {
+    items.push(`<span class="compare-badge ${Number(compare.momPercent) >= 0 ? "up" : "down"}">环比 ${Number(compare.momPercent) >= 0 ? "+" : ""}${compare.momPercent}%</span>`);
+  }
+  if (compare.yoyPercent !== null && compare.yoyPercent !== undefined) {
+    items.push(`<span class="compare-badge ${Number(compare.yoyPercent) >= 0 ? "up" : "down"}">同比 ${Number(compare.yoyPercent) >= 0 ? "+" : ""}${compare.yoyPercent}%</span>`);
+  }
+  return items.length ? `<div class="compare-row">${items.join("")}</div>` : "";
+}
+
 function setDashboardView(view, data = state.overview) {
   state.dashboardView = view || "overview";
   state.billType = state.dashboardView === "overview" ? "electricity" : state.dashboardView;
@@ -468,10 +505,11 @@ function bindDashboardViewTabs(data) {
   });
 }
 
-function renderSummaryCards(summary) {
+function renderSummaryCards(summary, comparisons = {}) {
   const root = document.querySelector("#summaryCards");
   root.innerHTML = ["electricity", "water", "gas"].map((type) => {
     const item = summary[type] || {};
+    const compare = comparisons[type] || {};
     const active = state.dashboardView === type ? "active" : "";
     const action = state.dashboardView === type ? "查看全部数据" : "进入详情";
     const badge = type === "electricity" ? `最新 ${item.statementDate || "--"}` : `账期 ${String(item.statementDate || "--").slice(0, 7)}`;
@@ -483,6 +521,7 @@ function renderSummaryCards(summary) {
       <div class="utility-head"><h2>${names[type]}</h2><span>${badge}</span></div>
       <strong>${money(item.amount)}</strong>
       <p>${type === "electricity" ? "本月" : "本期"} ${fmt(item.usage)} ${units[type]} · ${amountHint}</p>
+      ${comparisonBadges(compare)}
       <a class="btn card-detail-link" href="${detailHref}">${action}</a>
     </article>`;
   }).join("");
@@ -738,6 +777,7 @@ function renderDetail(data) {
   renderDetailInfo(type, account, summary);
   renderDetailStatus(account, type);
   renderDetailAvailability(type);
+  renderDetailWarnings(type, data.warnings || []);
   renderCalendar(data.dailyUsage || []);
   document.querySelector("#detailCalendarCard").hidden = type !== "electricity";
   document.querySelector("#periodInfoCard").hidden = type === "electricity";
@@ -846,10 +886,24 @@ async function initAdmin() {
   renderRunQueue(accounts, settings);
   renderSecuritySummary(accounts);
   renderAdminAlert(accounts);
-  document.querySelector("#jobsForm").innerHTML = (settings.jobs || []).map((job) => `<label>${names[job.utility_type]}采集时间<input class="input job-time" data-type="${job.utility_type}" value="${job.schedule_time || "07:30"}"></label>`).join("");
-  document.querySelector("#wecomWebhook").value = settings.wecom_webhook || "";
+  document.querySelector("#jobsForm").innerHTML = (settings.jobs || []).map((job) => jobScheduleRow(job)).join("");
+  bindJobScheduleToggles();
+  document.querySelector("#wecomCorpId").value = settings.wecom_corp_id || "";
+  document.querySelector("#wecomAgentId").value = settings.wecom_agent_id || "";
+  document.querySelector("#wecomSecret").value = "";
+  document.querySelector("#wecomSecretHint").textContent = settings.wecom_secret_configured ? "Secret 状态：已保存（留空保存表示不修改）" : "Secret 状态：未配置";
+  document.querySelector("#wecomToUser").value = settings.wecom_to_user || "@all";
+  document.querySelector("#pushCollectInfo").checked = settings.push_collect_info !== "false";
+  document.querySelector("#pushMonthlyBill").checked = settings.push_monthly_bill !== "false";
+  document.querySelector("#pushBillWarning").checked = settings.push_bill_warning !== "false";
   document.querySelector("#pushDaily").checked = settings.push_daily_summary === "true";
-  document.querySelector("#pushFailure").checked = settings.push_failure_alert === "true";
+  document.querySelector("#pushFailure").checked = settings.push_failure_alert !== "false";
+  document.querySelector("#alertAmountElectricity").value = settings.alert_amount_electricity || "";
+  document.querySelector("#alertAmountWater").value = settings.alert_amount_water || "";
+  document.querySelector("#alertAmountGas").value = settings.alert_amount_gas || "";
+  document.querySelector("#alertMomPercent").value = settings.alert_mom_percent || "";
+  document.querySelector("#alertYoyPercent").value = settings.alert_yoy_percent || "";
+  document.querySelector("#alertMissingBillDay").value = settings.alert_missing_bill_day || "";
   bindProviderActions();
   bindElectricityHistoryImport();
   await loadLogs();
@@ -861,10 +915,95 @@ async function initAdmin() {
     if (node) node.onchange = loadLogs;
   });
   document.querySelector("#saveSettings").onclick = async () => {
-    const jobs = [...document.querySelectorAll(".job-time")].map((input) => ({ utility_type: input.dataset.type, enabled: true, schedule_time: input.value || "07:30" }));
-    await api("/api/settings", { method: "POST", body: JSON.stringify({ jobs, wecom_webhook: document.querySelector("#wecomWebhook").value, push_daily_summary: document.querySelector("#pushDaily").checked, push_failure_alert: document.querySelector("#pushFailure").checked }) });
+    const payload = buildSettingsPayload();
+    await api("/api/settings", { method: "POST", body: JSON.stringify(payload) });
+    const refreshed = await api("/api/settings");
+    document.querySelector("#wecomSecret").value = "";
+    document.querySelector("#wecomSecretHint").textContent = refreshed.wecom_secret_configured ? "Secret 状态：已保存（留空保存表示不修改）" : "Secret 状态：未配置";
     showToast("配置已保存");
   };
+  const testBtn = document.querySelector("#testWecomPush");
+  if (testBtn) {
+    testBtn.onclick = async () => {
+      const result = document.querySelector("#wecomTestResult");
+      result.textContent = "正在发送测试消息…";
+      result.classList.remove("error");
+      try {
+        const payload = buildSettingsPayload();
+        const res = await api("/api/settings/wecom-test", { method: "POST", body: JSON.stringify(payload) });
+        result.textContent = res.message || (res.ok ? "测试消息已发送，请到企业微信查看。" : "测试失败");
+        result.classList.toggle("error", !res.ok);
+      } catch (err) {
+        result.textContent = String(err.message || err);
+        result.classList.add("error");
+      }
+    };
+  }
+}
+
+function jobScheduleRow(job) {
+  const type = job.utility_type;
+  const scheduleType = job.schedule_type || (type === "electricity" ? "daily" : "monthly");
+  const monthlyDays = job.monthly_days || (type === "electricity" ? "" : "2,3,5,8");
+  const time = job.schedule_time || (type === "electricity" ? "07:30" : "08:00");
+  const enabled = job.enabled === undefined || job.enabled === null ? 1 : Number(job.enabled);
+  return `<div class="job-row" data-type="${type}">
+    <div class="job-row-head">
+      <b>${names[type]}</b>
+      <label class="job-enabled"><input type="checkbox" class="job-enable" ${enabled ? "checked" : ""}> 启用</label>
+    </div>
+    <div class="form-grid job-row-grid">
+      <label>触发方式
+        <select class="input job-schedule-type">
+          <option value="daily" ${scheduleType === "daily" ? "selected" : ""}>每天</option>
+          <option value="monthly" ${scheduleType === "monthly" ? "selected" : ""}>每月指定日</option>
+        </select>
+      </label>
+      <label>采集时间<input class="input job-time" type="time" value="${time}"></label>
+      <label class="job-monthly-days" ${scheduleType === "monthly" ? "" : "hidden"}>月度日期<input class="input job-days" placeholder="2,3,5,8" value="${monthlyDays}"></label>
+    </div>
+  </div>`;
+}
+
+function bindJobScheduleToggles() {
+  document.querySelectorAll(".job-row").forEach((row) => {
+    const select = row.querySelector(".job-schedule-type");
+    const monthlyBox = row.querySelector(".job-monthly-days");
+    if (!select || !monthlyBox) return;
+    select.onchange = () => {
+      monthlyBox.hidden = select.value !== "monthly";
+    };
+  });
+}
+
+function buildSettingsPayload() {
+  const jobs = [...document.querySelectorAll(".job-row")].map((row) => ({
+    utility_type: row.dataset.type,
+    enabled: row.querySelector(".job-enable")?.checked ? 1 : 0,
+    schedule_time: row.querySelector(".job-time")?.value || "07:30",
+    schedule_type: row.querySelector(".job-schedule-type")?.value || "daily",
+    monthly_days: row.querySelector(".job-days")?.value || "",
+  }));
+  const payload = {
+    jobs,
+    wecom_corp_id: document.querySelector("#wecomCorpId").value.trim(),
+    wecom_agent_id: document.querySelector("#wecomAgentId").value.trim(),
+    wecom_to_user: document.querySelector("#wecomToUser").value.trim() || "@all",
+    push_collect_info: document.querySelector("#pushCollectInfo").checked,
+    push_monthly_bill: document.querySelector("#pushMonthlyBill").checked,
+    push_bill_warning: document.querySelector("#pushBillWarning").checked,
+    push_daily_summary: document.querySelector("#pushDaily").checked,
+    push_failure_alert: document.querySelector("#pushFailure").checked,
+    alert_amount_electricity: document.querySelector("#alertAmountElectricity").value,
+    alert_amount_water: document.querySelector("#alertAmountWater").value,
+    alert_amount_gas: document.querySelector("#alertAmountGas").value,
+    alert_mom_percent: document.querySelector("#alertMomPercent").value,
+    alert_yoy_percent: document.querySelector("#alertYoyPercent").value,
+    alert_missing_bill_day: document.querySelector("#alertMissingBillDay").value,
+  };
+  const secret = document.querySelector("#wecomSecret").value;
+  if (secret.trim()) payload.wecom_secret = secret.trim();
+  return payload;
 }
 
 function renderRunQueue(accounts = [], settings = {}) {

@@ -218,6 +218,7 @@ def seed(conn: sqlite3.Connection) -> None:
           ('wecom_agent_id', '', ?),
           ('wecom_secret', '', ?),
           ('wecom_to_user', '@all', ?),
+          ('wecom_relay_url', '', ?),
           ('push_collect_info', 'true', ?),
           ('push_monthly_bill', 'true', ?),
           ('push_bill_warning', 'true', ?),
@@ -228,7 +229,7 @@ def seed(conn: sqlite3.Connection) -> None:
           ('alert_yoy_percent', '30', ?),
           ('alert_missing_bill_day', '8', ?)
         """,
-        tuple(now_iso() for _ in range(16)),
+        tuple(now_iso() for _ in range(17)),
     )
     conn.commit()
 
@@ -680,6 +681,7 @@ def update_settings(conn: sqlite3.Connection, data: dict) -> None:
         "wecom_corp_id",
         "wecom_agent_id",
         "wecom_to_user",
+        "wecom_relay_url",
         "push_collect_info",
         "push_monthly_bill",
         "push_bill_warning",

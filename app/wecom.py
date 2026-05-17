@@ -8,9 +8,16 @@ from datetime import datetime, timedelta
 
 TOKEN_CACHE: dict[str, object] = {"token": "", "expires_at": datetime.min}
 
+WECOM_API_BASE = "https://qyapi.weixin.qq.com"
+
 
 class WeComError(RuntimeError):
     pass
+
+
+def base_url(settings: dict) -> str:
+    relay = (settings.get("wecom_relay_url") or "").strip().rstrip("/")
+    return relay or WECOM_API_BASE
 
 
 def enabled(settings: dict) -> bool:
@@ -28,7 +35,7 @@ def send_text(settings: dict, content: str) -> dict:
         "text": {"content": content[:2000]},
         "safe": 0,
     }
-    url = f"https://qyapi.weixin.qq.com/cgi-bin/message/send?access_token={urllib.parse.quote(token)}"
+    url = f"{base_url(settings)}/cgi-bin/message/send?access_token={urllib.parse.quote(token)}"
     data = request_json(url, payload=payload)
     if int(data.get("errcode") or 0) != 0:
         raise WeComError(mask_error(data))
@@ -44,7 +51,7 @@ def access_token(settings: dict) -> str:
         "corpid": settings.get("wecom_corp_id") or "",
         "corpsecret": settings.get("wecom_secret") or "",
     })
-    data = request_json(f"https://qyapi.weixin.qq.com/cgi-bin/gettoken?{query}")
+    data = request_json(f"{base_url(settings)}/cgi-bin/gettoken?{query}")
     if int(data.get("errcode") or 0) != 0 or not data.get("access_token"):
         raise WeComError(mask_error(data))
     TOKEN_CACHE["token"] = data["access_token"]

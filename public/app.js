@@ -893,6 +893,7 @@ async function initAdmin() {
   document.querySelector("#wecomSecret").value = "";
   document.querySelector("#wecomSecretHint").textContent = settings.wecom_secret_configured ? "Secret 状态：已保存（留空保存表示不修改）" : "Secret 状态：未配置";
   document.querySelector("#wecomToUser").value = settings.wecom_to_user || "@all";
+  document.querySelector("#wecomRelayUrl").value = settings.wecom_relay_url || "";
   document.querySelector("#pushCollectInfo").checked = settings.push_collect_info !== "false";
   document.querySelector("#pushMonthlyBill").checked = settings.push_monthly_bill !== "false";
   document.querySelector("#pushBillWarning").checked = settings.push_bill_warning !== "false";
@@ -989,6 +990,7 @@ function buildSettingsPayload() {
     wecom_corp_id: document.querySelector("#wecomCorpId").value.trim(),
     wecom_agent_id: document.querySelector("#wecomAgentId").value.trim(),
     wecom_to_user: document.querySelector("#wecomToUser").value.trim() || "@all",
+    wecom_relay_url: document.querySelector("#wecomRelayUrl").value.trim(),
     push_collect_info: document.querySelector("#pushCollectInfo").checked,
     push_monthly_bill: document.querySelector("#pushMonthlyBill").checked,
     push_bill_warning: document.querySelector("#pushBillWarning").checked,

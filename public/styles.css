@@ -547,8 +547,20 @@ body[data-detail="gas"] .hero-amount strong, body[data-detail="gas"] .detail-met
 
 .admin-header h1 { font-size: 28px; letter-spacing: -0.05em; }
 .admin-header p { margin-top: 6px; color: var(--muted); }
-.admin-grid { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 24px; margin-top: 24px; }
-.admin-menu { min-height: 560px; display: grid; align-content: start; gap: 14px; }
+.admin-grid {
+  display: grid;
+  grid-template-columns: 272px minmax(0, 1fr);
+  gap: 40px;
+  margin-top: 18px;
+}
+.admin-menu {
+  position: sticky;
+  top: 24px;
+  min-height: calc(100vh - 150px);
+  display: grid;
+  align-content: start;
+  gap: 12px;
+}
 .admin-menu a {
   padding: 16px;
   border-radius: 16px;
@@ -572,12 +584,23 @@ body[data-detail="gas"] .hero-amount strong, body[data-detail="gas"] .detail-met
 }
 .admin-console-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 330px;
+  grid-template-columns: minmax(0, 1fr) 334px;
   gap: 18px;
+  align-items: start;
 }
 .console-main { min-width: 0; }
-.provider-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
-.admin-provider { min-height: 330px; display: grid; gap: 10px; align-content: start; }
+.provider-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  align-items: start;
+}
+.admin-provider {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
 .admin-provider.electricity { border-color: #91e9e4; }
 .admin-provider.water { border-color: #a8d4ff; }
 .admin-provider.gas { border-color: #ffc48c; }
@@ -586,8 +609,28 @@ body[data-detail="gas"] .hero-amount strong, body[data-detail="gas"] .detail-met
 .admin-provider.gas .provider-title span { background: #fff7ed; color: #f97316; }
 .admin-provider p { color: #667085; line-height: 1.5; }
 .provider-note { padding: 14px; border-radius: 16px; background: #f8fafc; color: #667085; line-height: 1.55; }
-.provider-actions { display: flex; gap: 10px; margin-top: 6px; }
-.queue-card { align-content: start; }
+.provider-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 6px;
+}
+.provider-actions .btn {
+  width: 100%;
+  min-height: 56px;
+  padding: 12px 16px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+.provider-actions .history-btn {
+  grid-column: 1 / -1;
+}
+.queue-card {
+  display: grid;
+  align-content: start;
+  align-self: start;
+}
 .queue-list { display: grid; gap: 12px; margin-top: 16px; }
 .queue-item {
   display: grid;
@@ -603,7 +646,22 @@ body[data-detail="gas"] .hero-amount strong, body[data-detail="gas"] .detail-met
 .queue-item.ok { background: #effdf5; border-color: rgba(24, 160, 88, 0.24); }
 .queue-item.warn { background: #fff8e7; border-color: rgba(245, 158, 11, 0.35); }
 .queue-item.running { background: #edf6ff; border-color: rgba(38, 135, 255, 0.35); }
-.admin-bottom { display: grid; grid-template-columns: 1.15fr 1fr 1fr; gap: 18px; }
+.queue-hint {
+  margin-top: 12px;
+  padding: 13px 14px;
+  border-radius: 16px;
+  background: #f6f8fc;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+.admin-bottom {
+  display: grid;
+  grid-template-columns: 1fr 1fr minmax(430px, 1.35fr);
+  gap: 18px;
+  align-items: start;
+}
 .history-import-panel { margin: 18px 0; }
 .history-import-grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 16px; margin-top: 18px; }
 .upload-card {
@@ -762,10 +820,70 @@ textarea[readonly] { cursor: pointer; }
 .form-subhead { margin: 18px 0 8px; font-size: 14px; color: var(--muted, #475467); font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
 .form-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 18px; }
 .form-actions .btn { flex: 1 1 160px; }
-.wecom-app-grid, .push-toggle-grid, .alert-rules-grid { gap: 12px; }
+.wecom-app-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.push-toggle-grid, .alert-rules-grid { gap: 12px; }
 .push-toggle-grid label { display: flex; align-items: center; gap: 8px; font-weight: 700; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: #f8fafc; }
 .push-toggle-grid input[type="checkbox"] { width: 18px; height: 18px; }
 #wecomSecretHint { margin: 6px 0 0; color: var(--muted, #475467); font-size: 13px; }
+.wecom-proxy-card {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #f6f8fc;
+}
+.wecom-proxy-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: flex-start;
+}
+.wecom-proxy-head h3 {
+  margin: 0 0 5px;
+  font-size: 15px;
+}
+.wecom-proxy-head p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.wecom-proxy-head span {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #e8faf2;
+  color: #14a063;
+  font-size: 12px;
+  font-weight: 950;
+}
+.wecom-proxy-head span.direct {
+  background: #edf4ff;
+  color: #1260df;
+}
+.wecom-proxy-card label {
+  display: grid;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 900;
+}
+.wecom-proxy-notes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.wecom-proxy-notes span {
+  padding: 7px 10px;
+  border-radius: 999px;
+  background: white;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+}
 .wecom-test-result { margin-top: 10px; font-size: 13px; color: var(--muted, #475467); min-height: 18px; }
 .wecom-test-result.error { color: #b42318; font-weight: 700; }
 .job-row { display: grid; gap: 8px; padding: 14px; border: 1px solid var(--line); border-radius: 16px; background: #f8fafc; }
@@ -799,6 +917,10 @@ textarea[readonly] { cursor: pointer; }
 
 @media (max-width: 1180px) {
   .dashboard-grid, .admin-grid, .main-panels, .admin-bottom, .provider-grid, .range-card, .history-import-grid, .history-result-preview, .admin-console-grid, .workbench-grid, .detail-status-strip { grid-template-columns: 1fr; }
+  .admin-menu {
+    position: static;
+    min-height: auto;
+  }
   .brand-lockup { min-width: auto; }
   .app-header { align-items: center; }
   .left-rail { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -867,7 +989,9 @@ textarea[readonly] { cursor: pointer; }
   .detail-chart-viewport .detail-bars { min-width: 620px; }
   .detail-pager { align-items: stretch; flex-direction: column; }
   .detail-pager div { display: grid; grid-template-columns: 1fr 1fr; }
-  .provider-actions, .dialog-actions { grid-template-columns: 1fr; flex-direction: column; }
+  .provider-actions, .dialog-actions { grid-template-columns: 1fr; }
+  .wecom-app-grid { grid-template-columns: 1fr; }
+  .wecom-proxy-head { flex-direction: column; }
   .admin-menu { min-height: auto; }
   .login-page { grid-template-columns: 1fr; padding: 16px; }
   .login-hero { min-height: 420px; }

@@ -894,6 +894,7 @@ async function initAdmin() {
   document.querySelector("#wecomSecretHint").textContent = settings.wecom_secret_configured ? "Secret 状态：已保存（留空保存表示不修改）" : "Secret 状态：未配置";
   document.querySelector("#wecomToUser").value = settings.wecom_to_user || "@all";
   document.querySelector("#wecomRelayUrl").value = settings.wecom_relay_url || "";
+  syncWecomProxyStatus();
   document.querySelector("#pushCollectInfo").checked = settings.push_collect_info !== "false";
   document.querySelector("#pushMonthlyBill").checked = settings.push_monthly_bill !== "false";
   document.querySelector("#pushBillWarning").checked = settings.push_bill_warning !== "false";
@@ -921,8 +922,11 @@ async function initAdmin() {
     const refreshed = await api("/api/settings");
     document.querySelector("#wecomSecret").value = "";
     document.querySelector("#wecomSecretHint").textContent = refreshed.wecom_secret_configured ? "Secret 状态：已保存（留空保存表示不修改）" : "Secret 状态：未配置";
+    document.querySelector("#wecomRelayUrl").value = refreshed.wecom_relay_url || "";
+    syncWecomProxyStatus();
     showToast("配置已保存");
   };
+  document.querySelector("#wecomRelayUrl").oninput = syncWecomProxyStatus;
   const testBtn = document.querySelector("#testWecomPush");
   if (testBtn) {
     testBtn.onclick = async () => {
@@ -940,6 +944,15 @@ async function initAdmin() {
       }
     };
   }
+}
+
+function syncWecomProxyStatus() {
+  const input = document.querySelector("#wecomRelayUrl");
+  const status = document.querySelector("#wecomProxyStatus");
+  if (!input || !status) return;
+  const enabled = Boolean(input.value.trim());
+  status.textContent = enabled ? "已启用" : "直连";
+  status.classList.toggle("direct", !enabled);
 }
 
 function jobScheduleRow(job) {

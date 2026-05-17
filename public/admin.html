@@ -17,7 +17,7 @@
       </header>
 
       <main class="admin-grid">
-        <aside class="admin-menu">
+        <aside class="admin-menu admin-sidenav">
           <h2>管理菜单</h2>
           <a class="active" href="#channels">渠道接入</a>
           <a href="#electricityHistory">国电历史导入</a>
@@ -29,7 +29,7 @@
         <section class="admin-content">
           <div class="info-banner" id="adminAlert">授权信息有有效期。后台会显示最后授权时间、失败时间和下次可执行时间，避免在风控期反复触发。</div>
 
-          <section class="admin-console-grid" id="runConsole">
+          <section class="admin-console-grid admin-section" id="runConsole">
             <div class="panel-card console-main">
               <div class="panel-head">
                 <div>
@@ -44,10 +44,11 @@
             <aside class="panel-card queue-card">
               <h2>今日执行队列</h2>
               <div class="queue-list" id="runQueue"></div>
+              <p class="queue-hint">队列区只展示今天的执行状态和下一步建议，避免右侧留下无意义空白。</p>
             </aside>
           </section>
 
-          <section class="panel-card history-import-panel" id="electricityHistory">
+          <section class="panel-card history-import-panel admin-section" id="electricityHistory">
             <div class="panel-head">
               <div>
                 <h2>国电历史数据导入</h2>
@@ -73,8 +74,8 @@
             <div class="history-import-result" id="electricityHistoryResult"></div>
           </section>
 
-          <section class="admin-bottom">
-            <div class="panel-card">
+          <section class="admin-bottom admin-section">
+            <div class="panel-card reauth-panel">
               <h2>重新授权流程</h2>
               <ol class="step-list">
                 <li><span>1</span>打开对应官方页面或小程序账单页并完成登录</li>
@@ -83,13 +84,13 @@
               </ol>
             </div>
 
-            <div class="panel-card" id="jobs">
+            <div class="panel-card jobs-panel" id="jobs">
               <h2>采集计划</h2>
               <div class="form-grid" id="jobsForm"></div>
               <p class="helper">电费按日采集；水费/燃气只有月度账单，建议在每月 1-8 号轮询采集，避免月初出账延迟。</p>
             </div>
 
-            <div class="panel-card" id="push">
+            <div class="panel-card push-panel" id="push">
               <h2>企业微信应用推送</h2>
               <p class="helper">使用自建应用接口推送（非机器人 Webhook）。Secret 仅本地保存，不会回显。</p>
               <div class="form-grid wecom-app-grid">
@@ -97,9 +98,23 @@
                 <label>AgentId<input class="input" id="wecomAgentId" placeholder="应用 AgentId（数字）"></label>
                 <label>Secret<input class="input" id="wecomSecret" type="password" autocomplete="new-password" placeholder="留空则保留旧值"></label>
                 <label>接收人<input class="input" id="wecomToUser" placeholder="@all 或 user1|user2"></label>
-                <label>API 反代地址<input class="input" id="wecomRelayUrl" placeholder="留空直连 qyapi.weixin.qq.com"></label>
               </div>
               <p class="helper" id="wecomSecretHint">Secret 状态：未配置</p>
+              <section class="wecom-proxy-card" aria-labelledby="wecomProxyTitle">
+                <div class="wecom-proxy-head">
+                  <div>
+                    <h3 id="wecomProxyTitle">应用反代设置</h3>
+                    <p>用于企业微信应用接口走内网或自建代理，留空则直连官方接口。</p>
+                  </div>
+                  <span id="wecomProxyStatus">直连</span>
+                </div>
+                <label>API 反代地址<input class="input" id="wecomRelayUrl" placeholder="例如：https://proxy.example.com/wecom"></label>
+                <div class="wecom-proxy-notes">
+                  <span>可信域名</span>
+                  <span>回调路径</span>
+                  <span>请求签名测试</span>
+                </div>
+              </section>
               <h3 class="form-subhead">推送内容</h3>
               <div class="form-grid push-toggle-grid">
                 <label><input type="checkbox" id="pushCollectInfo"> 采集信息</label>
@@ -125,7 +140,7 @@
             </div>
           </section>
 
-          <section class="panel-card log-workbench" id="logs">
+          <section class="panel-card log-workbench admin-section" id="logs">
             <div class="panel-head">
               <div>
                 <h2>采集日志</h2>

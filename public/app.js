@@ -772,6 +772,7 @@ async function loadLogs() {
 
 function logRow(row) {
   const details = row.details || {};
+  const meta = renderLogMeta(row, details);
   const counts = [
     details.billsReceived !== undefined ? `账单 ${details.billsReceived} 条` : "",
     details.dailyReceived !== undefined ? `日数据 ${details.dailyReceived} 条` : "",
@@ -788,11 +789,26 @@ function logRow(row) {
   return `<article class="log-row ${row.level}">
     <div><b>${row.module}</b><span>${formatDateTime(row.created_at)}</span></div>
     <p>${row.message}</p>
+    ${meta}
     ${counts ? `<em>${counts}</em>` : ""}
     ${diagnosis}
     ${rowsHtml}
     ${errorText}
   </article>`;
+}
+
+function renderLogMeta(row, details) {
+  const items = [
+    ["记录时间", formatDateTime(row.created_at)],
+    details.executedAt ? ["执行时间", formatDateTime(details.executedAt)] : null,
+    details.finishedAt ? ["完成时间", formatDateTime(details.finishedAt)] : null,
+    details.failedAt ? ["失效时间", formatDateTime(details.failedAt)] : null,
+    details.nextAllowedAt ? ["下次允许", formatDateTime(details.nextAllowedAt)] : null,
+    details.exceptionType ? ["异常类型", details.exceptionType] : null,
+    details.cooldownHours ? ["冷却间隔", `${details.cooldownHours} 小时`] : null,
+    details.reason === "cooldown" ? ["保护状态", "已阻止外部请求"] : null,
+  ].filter(Boolean);
+  return items.length ? `<div class="log-meta-grid">${items.map(([label, value]) => `<span><b>${label}</b><small>${value}</small></span>`).join("")}</div>` : "";
 }
 
 function renderLogDiagnosis(details) {

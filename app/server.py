@@ -7,7 +7,7 @@ import secrets
 import threading
 import time
 import urllib.parse
-from datetime import datetime
+from datetime import datetime, timedelta
 from http import cookies
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -84,6 +84,10 @@ SGCC_ERROR_HINTS = {
     "10002": "国网登录状态已过期，需要重新授权或等待下次自动登录。",
 }
 
+COOLDOWN_HOURS = {
+    "electricity": 24,
+}
+
 
 def admin_user() -> str:
     return os.environ.get("ADMIN_USERNAME", "admin")
@@ -149,6 +153,7 @@ def generic_user_message(exc: Exception) -> str:
 
 def error_log_details(utility_type: str, exc: Exception) -> dict:
     raw = str(exc) or exc.__class__.__name__
+    now = datetime.now()
     stage = "外部接口请求"
     if utility_type == "electricity":
         if "账号密码登录" in raw or "GB002" in raw or "GB010" in raw:
@@ -166,9 +171,56 @@ def error_log_details(utility_type: str, exc: Exception) -> dict:
         "provider": UTILITY_LABELS.get(utility_type, utility_type),
         "stage": stage,
         "code": matched_code,
+        "exceptionType": exc.__class__.__name__,
+        "executedAt": now.isoformat(timespec="seconds"),
+        "failedAt": now.isoformat(timespec="seconds"),
+        "nextAllowedAt": next_allowed_at(utility_type, now),
+        "cooldownHours": COOLDOWN_HOURS.get(utility_type, 0),
         "explain": SGCC_ERROR_HINTS.get(matched_code, ""),
         "suggestion": "不要连续手动测试同一国网账号；国网有每日风控次数限制，建议等待明天自动采集或重新授权后只测试一次。" if utility_type == "electricity" else "请检查授权信息是否过期，必要时重新导入后再试。",
         "raw": raw,
+    }
+
+
+def next_allowed_at(utility_type: str, from_time: datetime | None = None) -> str:
+    hours = COOLDOWN_HOURS.get(utility_type, 0)
+    if not hours:
+        return ""
+    base = from_time or datetime.now()
+    return (base.replace(microsecond=0) + timedelta(hours=hours)).isoformat()
+
+
+def parse_iso_datetime(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00")).replace(tzinfo=None)
+    except ValueError:
+        return None
+
+
+def cooldown_block(conn, utility_type: str) -> dict | None:
+    hours = COOLDOWN_HOURS.get(utility_type, 0)
+    if not hours:
+        return None
+    existing = get_collection_run(conn, utility_type)
+    if not existing or existing.get("status") != "error":
+        return None
+    finished_at = parse_iso_datetime(existing.get("finished_at") or existing.get("started_at"))
+    if not finished_at:
+        return None
+    next_at = finished_at + timedelta(hours=hours)
+    now = datetime.now()
+    if now >= next_at:
+        return None
+    return {
+        "blocked": True,
+        "reason": "cooldown",
+        "cooldownHours": hours,
+        "lastRun": existing,
+        "lastFailedAt": finished_at.isoformat(timespec="seconds"),
+        "nextAllowedAt": next_at.isoformat(timespec="seconds"),
+        "now": now.isoformat(timespec="seconds"),
     }
 
 
@@ -190,9 +242,10 @@ def local_check_for(conn, utility_type: str) -> dict:
     }
 
 
-def collection_log_details(result: dict, inserted: int, daily_count: int) -> dict:
+def collection_log_details(utility_type: str, result: dict, inserted: int, daily_count: int) -> dict:
     bills = result.get("bills") or []
     daily = result.get("daily") or []
+    now = datetime.now()
 
     def amount_value(value):
         return None if value is None or value == "" else value
@@ -222,10 +275,13 @@ def collection_log_details(result: dict, inserted: int, daily_count: int) -> dic
         for row in daily[:80]
     ]
     return {
+        "executedAt": now.isoformat(timespec="seconds"),
+        "finishedAt": now.isoformat(timespec="seconds"),
         "billsReceived": len(bills),
         "billsInserted": inserted,
         "dailyReceived": len(daily),
         "dailyInserted": daily_count,
+        "nextAllowedAt": next_allowed_at(utility_type, now),
         "billRows": bill_rows,
         "dailyRows": daily_rows,
         "billDates": [row.get("statementDate") for row in bills[:8] if row.get("statementDate")],
@@ -271,11 +327,35 @@ def import_electricity_history(conn, content_base64: str) -> dict:
 
 
 def run_collect_for(conn, utility_type: str, trigger_type: str = "scheduled", force: bool = False) -> dict:
+    block = cooldown_block(conn, utility_type)
+    if block and not force:
+        message = f"{UTILITY_LABELS.get(utility_type, utility_type)}仍在风控冷却期，已阻止本次外部采集。"
+        details = {
+            **block,
+            "provider": UTILITY_LABELS.get(utility_type, utility_type),
+            "stage": "风控冷却保护",
+            "executedAt": block["now"],
+            "suggestion": f"上次失败后需间隔 {block['cooldownHours']} 小时再尝试；冷却期间页面继续读取本地落盘数据。",
+            "local": local_data_status(conn, utility_type),
+        }
+        insert_log(conn, "info", f"{utility_type}-collector", message, details)
+        return {
+            "ok": True,
+            "skipped": True,
+            "cooldown": True,
+            "message": message,
+            "nextAllowedAt": block["nextAllowedAt"],
+            "local": local_data_status(conn, utility_type),
+        }
     existing_run = get_collection_run(conn, utility_type)
     if existing_run and not force:
+        finished = parse_iso_datetime(existing_run.get("finished_at") or existing_run.get("started_at"))
         insert_log(conn, "info", f"{utility_type}-collector", "今日已执行过采集，已跳过外部登录。", {
             "skipped": True,
             "run": existing_run,
+            "executedAt": existing_run.get("started_at") or existing_run.get("finished_at"),
+            "finishedAt": existing_run.get("finished_at"),
+            "nextAllowedAt": next_allowed_at(utility_type, finished) if finished else "",
             "local": local_data_status(conn, utility_type),
         })
         return {
@@ -303,7 +383,7 @@ def run_collect_for(conn, utility_type: str, trigger_type: str = "scheduled", fo
         message = result.get("message") or f"采集完成：新增账单 {inserted} 条"
         mark_collected(conn, utility_type, True, message)
         finish_collection_run(conn, utility_type, True, message, inserted, daily_count)
-        insert_log(conn, "info", f"{utility_type}-collector", message, collection_log_details(result, inserted, daily_count))
+        insert_log(conn, "info", f"{utility_type}-collector", message, collection_log_details(utility_type, result, inserted, daily_count))
         return {"ok": True, "message": message, "inserted": inserted, "daily": daily_count}
     except Exception as exc:
         message = user_message(utility_type, exc)
@@ -402,7 +482,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/analytics":
             return self.redirect("/analytics.html")
         if path == "/healthz":
-            return self.json(200, {"ok": True, "app": "home-utility-ledger-standalone", "version": "standalone-2026.05.16-inline-custom-range"})
+            return self.json(200, {"ok": True, "app": "home-utility-ledger-standalone", "version": "standalone-2026.05.17-cooldown-logs"})
         if path == "/api/me":
             return self.json(200, {"ok": True, "authenticated": self.authed()})
         if path == "/login.html":

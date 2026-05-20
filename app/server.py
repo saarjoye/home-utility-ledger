@@ -210,13 +210,16 @@ def cooldown_block(conn, utility_type: str) -> dict | None:
     hours = COOLDOWN_HOURS.get(utility_type, 0)
     if not hours:
         return None
-    existing = get_collection_run(conn, utility_type)
-    if not existing or existing.get("status") != "error":
+    job_row = conn.execute(
+        "SELECT last_run_at, last_status, last_message FROM jobs WHERE utility_type = ?",
+        (utility_type,),
+    ).fetchone()
+    if not job_row or job_row["last_status"] != "error":
         return None
-    finished_at = parse_iso_datetime(existing.get("finished_at") or existing.get("started_at"))
-    if not finished_at:
+    last_failed_at = parse_iso_datetime(job_row["last_run_at"])
+    if not last_failed_at:
         return None
-    next_at = finished_at + timedelta(hours=hours)
+    next_at = last_failed_at + timedelta(hours=hours)
     now = datetime.now()
     if now >= next_at:
         return None
@@ -224,8 +227,8 @@ def cooldown_block(conn, utility_type: str) -> dict | None:
         "blocked": True,
         "reason": "cooldown",
         "cooldownHours": hours,
-        "lastRun": existing,
-        "lastFailedAt": finished_at.isoformat(timespec="seconds"),
+        "lastMessage": job_row["last_message"] or "",
+        "lastFailedAt": last_failed_at.isoformat(timespec="seconds"),
         "nextAllowedAt": next_at.isoformat(timespec="seconds"),
         "now": now.isoformat(timespec="seconds"),
     }
@@ -336,12 +339,34 @@ def import_electricity_history(conn, content_base64: str) -> dict:
 def should_run_job(job: dict, now: datetime) -> bool:
     if not job.get("enabled"):
         return False
-    if job.get("schedule_time") != now.strftime("%H:%M"):
-        return False
     if (job.get("schedule_type") or "daily") == "monthly":
         days = parse_monthly_days(job.get("monthly_days") or "")
-        return now.day in days
-    return True
+        if now.day not in days:
+            return False
+    last_run_at = parse_iso_datetime(job.get("last_run_at"))
+    if last_run_at and last_run_at.date() == now.date():
+        return False
+    due_at = scheduled_run_at(job, now)
+    if last_run_at and job.get("last_status") == "error":
+        cooldown_hours = COOLDOWN_HOURS.get(job.get("utility_type") or "", 0)
+        if cooldown_hours:
+            due_at = max(due_at, last_run_at + timedelta(hours=cooldown_hours))
+    return now >= due_at
+
+
+def scheduled_run_at(job: dict, now: datetime) -> datetime:
+    hour, minute = parse_schedule_time(job.get("schedule_time") or "07:30")
+    return now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+
+
+def parse_schedule_time(value: str) -> tuple[int, int]:
+    try:
+        hour_text, minute_text = str(value or "").split(":", 1)
+        hour = min(23, max(0, int(hour_text)))
+        minute = min(59, max(0, int(minute_text)))
+        return hour, minute
+    except (TypeError, ValueError):
+        return 7, 30
 
 
 def parse_monthly_days(value: str) -> set[int]:
